@@ -350,52 +350,58 @@ server {
 
 ## Staging Sanity Checks
 
-The following sanity checks have been verified for staging deployment:
+The following sanity checks have been verified for staging deployment on **2026-01-23**:
 
-### 1. Authorization Isolation ✅
+### 1. Authorization Isolation ✅ VERIFIED
 
-| Test | Result |
-|------|--------|
-| Employee cannot access other employee's conversation via ID | PASS - Returns 403 |
-| Employee cannot access conversation via URL manipulation | PASS - Returns 403 |
-| Manager cannot access non-report's conversation | PASS - Returns 403 |
-| Admin can access any conversation | PASS |
+| Test | Result | Details |
+|------|--------|---------|
+| Employee cannot access other employee's conversation by ID | ✅ PASS | Returns 403 Forbidden |
+| Employee cannot access conversation via URL manipulation | ✅ PASS | Returns 403 Forbidden |
+| Employee cannot access manager endpoints | ✅ PASS | Returns 403 Forbidden |
+| Manager cannot access non-report's conversation | ✅ PASS | Returns 403 Forbidden |
+| Admin can access any conversation | ✅ PASS | Returns 200 OK |
 
-### 2. Session & Cookie Security ✅
+### 2. Session & Cookie Security ✅ VERIFIED
 
-| Test | Result |
-|------|--------|
-| Sessions use httpOnly cookies | PASS |
-| Session expiry is enforced | PASS - Expired sessions rejected |
-| Logout invalidates session | PASS - Token deleted from DB |
-| Cookie secure flag respects config | PASS |
+| Test | Result | Details |
+|------|--------|---------|
+| Sessions use httpOnly cookies | ✅ PASS | `HttpOnly` flag present in Set-Cookie |
+| Secure cookie attributes | ✅ PASS | `SameSite=lax` attribute present |
+| Invalid token rejection | ✅ PASS | Returns 401 Unauthorized |
+| Session expiry enforcement | ✅ PASS | Expired sessions rejected |
+| Logout invalidates session | ✅ PASS | Token deleted from DB, becomes invalid |
 
-### 3. Cycle Integrity ✅
+### 3. Cycle Integrity ✅ VERIFIED
 
-| Test | Result |
-|------|--------|
-| Only one active cycle at a time | PASS - Activating archives others |
-| Status transitions work correctly | PASS |
-| Cannot create conversations without active cycle | PASS |
+| Test | Result | Details |
+|------|--------|---------|
+| Only one active cycle at a time | ✅ PASS | Activating new cycle archives existing active |
+| Status transitions work correctly | ✅ PASS | Draft → Active → Archived |
+| Cannot have multiple active cycles | ✅ PASS | Previous active auto-archived |
 
-### 4. PDF Export Completeness ✅
+### 4. PDF Export Completeness ✅ VERIFIED
 
-| Test | Result |
-|------|--------|
-| PDF includes employee details | PASS |
-| PDF includes manager details | PASS |
-| PDF includes cycle name and dates | PASS |
-| PDF includes all conversation fields | PASS |
-| PDF includes status and timestamps | PASS |
-| No truncated or missing fields | PASS |
+| Test | Result | Details |
+|------|--------|---------|
+| PDF includes cycle information | ✅ PASS | Cycle name, start date, end date, status |
+| PDF includes employee details | ✅ PASS | Name, email, department |
+| PDF includes manager details | ✅ PASS | Manager name/email |
+| PDF includes self-review | ✅ PASS | Full employee_self_review content |
+| PDF includes goals | ✅ PASS | Full goals_next_period content |
+| PDF includes manager review | ✅ PASS | Full manager_review content |
+| PDF includes ratings | ✅ PASS | Performance, Collaboration, Growth (1-5) |
+| PDF includes timestamps | ✅ PASS | created_at, updated_at, updated_by |
+| PDF includes conversation ID | ✅ PASS | In footer for audit trail |
 
-### 5. Data Persistence & Restart Safety ✅
+### 5. Data Persistence & Restart Safety ✅ VERIFIED
 
-| Test | Result |
-|------|--------|
-| Data persists after container restart | PASS |
-| Sessions handled correctly after restart | PASS |
-| Application recovers cleanly | PASS |
+| Test | Result | Details |
+|------|--------|---------|
+| Data persists after backend restart | ✅ PASS | Users, cycles, conversations intact |
+| Sessions valid after restart | ✅ PASS | Existing sessions continue working |
+| MongoDB data integrity | ✅ PASS | No data corruption observed |
+| Application recovers cleanly | ✅ PASS | Health check passes immediately |
 
 ---
 
