@@ -861,6 +861,29 @@ async def export_conversation_pdf(
     # Reset text color after header
     pdf.set_text_color(0, 0, 0)
     
+    # Cycle Information Section
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_fill_color(100, 100, 100)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, 'Cycle Information', ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.ln(3)
+    
+    cycle_start = cycle.get('start_date', 'N/A') if cycle else 'N/A'
+    cycle_end = cycle.get('end_date', 'N/A') if cycle else 'N/A'
+    cycle_status = cycle.get('status', 'N/A').title() if cycle else 'N/A'
+    
+    pdf.cell(40, 6, 'Cycle Name:', 0)
+    pdf.cell(0, 6, cycle_name, ln=True)
+    pdf.cell(40, 6, 'Start Date:', 0)
+    pdf.cell(0, 6, str(cycle_start)[:10] if cycle_start != 'N/A' else 'N/A', ln=True)
+    pdf.cell(40, 6, 'End Date:', 0)
+    pdf.cell(0, 6, str(cycle_end)[:10] if cycle_end != 'N/A' else 'N/A', ln=True)
+    pdf.cell(40, 6, 'Cycle Status:', 0)
+    pdf.cell(0, 6, cycle_status, ln=True)
+    pdf.ln(8)
+    
     # Employee Info Section
     pdf.set_font('Helvetica', 'B', 12)
     pdf.set_fill_color(0, 122, 255)
