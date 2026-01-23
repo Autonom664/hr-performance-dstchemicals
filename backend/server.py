@@ -332,10 +332,16 @@ async def auth_me(user: User = Depends(require_auth)):
 async def auth_logout(request: Request, response: Response):
     """Logout and invalidate session."""
     session_token = request.cookies.get("session_token")
+    if not session_token:
+        # Also check Authorization header
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_token = auth_header.split(" ")[1]
+    
     if session_token:
         await db.sessions.delete_many({"session_token": session_token})
     
-    response.delete_cookie("session_token")
+    response.delete_cookie("session_token", secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE)
     return {"message": "Logged out successfully"}
 
 # ============ ENTRA SSO ROUTES (SCAFFOLD) ============
