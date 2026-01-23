@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { Checkbox } from '../components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -18,16 +19,9 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '../components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, FileText, Settings } from 'lucide-react';
+import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -44,18 +38,25 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [cycleDialogOpen, setCycleDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [creatingCycle, setCreatingCycle] = useState(false);
+  const [resettingPasswords, setResettingPasswords] = useState(false);
   const fileInputRef = useRef(null);
   
   // Import form state
   const [importMethod, setImportMethod] = useState('json');
   const [jsonInput, setJsonInput] = useState('');
+  const [lastImportCredentials, setLastImportCredentials] = useState(null);
   
   // Cycle form state
   const [cycleName, setCycleName] = useState('');
   const [cycleStartDate, setCycleStartDate] = useState(null);
   const [cycleEndDate, setCycleEndDate] = useState(null);
+  
+  // Password reset state
+  const [selectedUsersForReset, setSelectedUsersForReset] = useState([]);
+  const [lastResetCredentials, setLastResetCredentials] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -89,7 +90,12 @@ const AdminPage = () => {
       
       const response = await axiosInstance.post('/admin/users/import', usersArray);
       toast.success(response.data.message);
-      setImportDialogOpen(false);
+      
+      // Store credentials for download if new users were created
+      if (response.data.credentials_csv) {
+        setLastImportCredentials(response.data.credentials_csv);
+      }
+      
       setJsonInput('');
       fetchData();
     } catch (error) {
@@ -116,13 +122,90 @@ const AdminPage = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success(response.data.message);
-      setImportDialogOpen(false);
+      
+      // Store credentials for download if new users were created
+      if (response.data.credentials_csv) {
+        setLastImportCredentials(response.data.credentials_csv);
+      }
+      
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'CSV import failed');
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const downloadCredentialsCsv = (csvContent, filename) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadImportCredentials = () => {
+    if (lastImportCredentials) {
+      downloadCredentialsCsv(lastImportCredentials, `user_credentials_${new Date().toISOString().slice(0,10)}.csv`);
+      setLastImportCredentials(null); // Clear after download (one-time)
+      setImportDialogOpen(false);
+      toast.success('Credentials downloaded. This was a one-time download.');
+    }
+  };
+
+  const handleResetPasswords = async () => {
+    if (selectedUsersForReset.length === 0) {
+      toast.error('Please select at least one user');
+      return;
+    }
+
+    setResettingPasswords(true);
+    try {
+      const response = await axiosInstance.post('/admin/users/reset-passwords', {
+        emails: selectedUsersForReset,
+      });
+      
+      toast.success(response.data.message);
+      
+      if (response.data.credentials_csv) {
+        setLastResetCredentials(response.data.credentials_csv);
+      }
+      
+      setSelectedUsersForReset([]);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Password reset failed');
+    } finally {
+      setResettingPasswords(false);
+    }
+  };
+
+  const handleDownloadResetCredentials = () => {
+    if (lastResetCredentials) {
+      downloadCredentialsCsv(lastResetCredentials, `password_reset_${new Date().toISOString().slice(0,10)}.csv`);
+      setLastResetCredentials(null);
+      setResetPasswordDialogOpen(false);
+      toast.success('Reset credentials downloaded. This was a one-time download.');
+    }
+  };
+
+  const toggleUserSelection = (email) => {
+    setSelectedUsersForReset(prev => 
+      prev.includes(email) 
+        ? prev.filter(e => e !== email)
+        : [...prev, email]
+    );
+  };
+
+  const selectAllUsers = () => {
+    if (selectedUsersForReset.length === users.length) {
+      setSelectedUsersForReset([]);
+    } else {
+      setSelectedUsersForReset(users.map(u => u.email));
     }
   };
 
@@ -190,7 +273,7 @@ const AdminPage = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-            <p className="text-gray-400 mt-1">Manage users, cycles, and system settings</p>
+            <p className="text-gray-400 mt-1">Manage users, cycles, and passwords</p>
           </div>
         </div>
 
@@ -208,86 +291,226 @@ const AdminPage = () => {
 
           {/* Users Tab */}
           <TabsContent value="users" className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-4">
               <p className="text-gray-400">{users.length} users in system</p>
-              <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-[#007AFF] hover:bg-[#007AFF]/90" data-testid="import-users-btn">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Users
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-[#121212] border-white/10 max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Import Users</DialogTitle>
-                    <DialogDescription>
-                      Import users from CSV or JSON format
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <Tabs value={importMethod} onValueChange={setImportMethod} className="mt-4">
-                    <TabsList className="bg-[#1E1E1E] border border-white/10">
-                      <TabsTrigger value="json" data-testid="json-import-tab">JSON</TabsTrigger>
-                      <TabsTrigger value="csv" data-testid="csv-import-tab">CSV</TabsTrigger>
-                    </TabsList>
+              <div className="flex gap-2">
+                {/* Reset Password Dialog */}
+                <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10" data-testid="reset-passwords-btn">
+                      <KeyRound className="w-4 h-4 mr-2" />
+                      Reset Passwords
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-[#121212] border-white/10 max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <KeyRound className="w-5 h-5 text-yellow-400" />
+                        Reset User Passwords
+                      </DialogTitle>
+                      <DialogDescription>
+                        Generate new one-time passwords for selected users. Their current passwords will be invalidated immediately.
+                      </DialogDescription>
+                    </DialogHeader>
                     
-                    <TabsContent value="json" className="space-y-4 mt-4">
-                      <div className="space-y-2">
-                        <Label>JSON Data</Label>
-                        <Textarea
-                          value={jsonInput}
-                          onChange={(e) => setJsonInput(e.target.value)}
-                          placeholder={sampleJson}
-                          className="min-h-[200px] font-mono text-sm bg-[#1E1E1E] border-white/10"
-                          data-testid="json-input"
-                        />
-                        <p className="text-xs text-gray-500">
-                          Required fields: employee_email. Optional: employee_name, manager_email, department, is_admin
-                        </p>
-                      </div>
-                      <Button 
-                        onClick={handleJsonImport} 
-                        disabled={importing}
-                        className="w-full bg-[#007AFF] hover:bg-[#007AFF]/90"
-                        data-testid="import-json-btn"
-                      >
-                        {importing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                        Import JSON
-                      </Button>
-                    </TabsContent>
-                    
-                    <TabsContent value="csv" className="space-y-4 mt-4">
-                      <div className="space-y-2">
-                        <Label>CSV File</Label>
-                        <div className="border-2 border-dashed border-white/10 rounded-lg p-8 text-center">
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".csv"
-                            onChange={handleCsvImport}
-                            className="hidden"
-                            id="csv-upload"
-                            data-testid="csv-input"
-                          />
-                          <label htmlFor="csv-upload" className="cursor-pointer">
-                            <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                            <p className="text-gray-400">Click to upload CSV file</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Headers: employee_email, employee_name, manager_email, department, is_admin
-                            </p>
-                          </label>
+                    {lastResetCredentials ? (
+                      <div className="space-y-4 mt-4">
+                        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <p className="text-green-400 font-medium mb-2">Passwords reset successfully!</p>
+                          <p className="text-sm text-gray-400">
+                            Download the CSV file containing the new passwords. This is a ONE-TIME download - 
+                            passwords will not be shown again.
+                          </p>
                         </div>
-                        {importing && (
-                          <div className="flex items-center justify-center gap-2 text-gray-400">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Importing...
-                          </div>
-                        )}
+                        <Button 
+                          onClick={handleDownloadResetCredentials}
+                          className="w-full bg-green-600 hover:bg-green-700"
+                          data-testid="download-reset-csv-btn"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Password CSV (One-Time)
+                        </Button>
                       </div>
-                    </TabsContent>
-                  </Tabs>
-                </DialogContent>
-              </Dialog>
+                    ) : (
+                      <div className="space-y-4 mt-4">
+                        <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5" />
+                            <div>
+                              <p className="text-yellow-400 font-medium">Security Warning</p>
+                              <p className="text-sm text-gray-400 mt-1">
+                                Resetting passwords will immediately invalidate existing passwords and log users out. 
+                                Users will need to use the new password and must change it on first login.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label>Select Users ({selectedUsersForReset.length} selected)</Label>
+                            <Button variant="ghost" size="sm" onClick={selectAllUsers} className="text-xs">
+                              {selectedUsersForReset.length === users.length ? 'Deselect All' : 'Select All'}
+                            </Button>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto border border-white/10 rounded-lg divide-y divide-white/10">
+                            {users.map((user) => (
+                              <div 
+                                key={user.email} 
+                                className="flex items-center gap-3 p-3 hover:bg-white/5 cursor-pointer"
+                                onClick={() => toggleUserSelection(user.email)}
+                              >
+                                <Checkbox 
+                                  checked={selectedUsersForReset.includes(user.email)}
+                                  onCheckedChange={() => toggleUserSelection(user.email)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">{user.name || user.email}</p>
+                                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                </div>
+                                <div className="flex gap-1">
+                                  {user.roles?.map((role) => (
+                                    <Badge key={role} variant="outline" className="text-xs border-gray-500/30 text-gray-400">
+                                      {role}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          onClick={handleResetPasswords}
+                          disabled={resettingPasswords || selectedUsersForReset.length === 0}
+                          className="w-full bg-yellow-600 hover:bg-yellow-700"
+                          data-testid="confirm-reset-btn"
+                        >
+                          {resettingPasswords ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <KeyRound className="w-4 h-4 mr-2" />}
+                          Reset {selectedUsersForReset.length} Password(s)
+                        </Button>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+
+                {/* Import Users Dialog */}
+                <Dialog open={importDialogOpen} onOpenChange={(open) => {
+                  setImportDialogOpen(open);
+                  if (!open) {
+                    setLastImportCredentials(null);
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-[#007AFF] hover:bg-[#007AFF]/90" data-testid="import-users-btn">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import Users
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-[#121212] border-white/10 max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Import Users</DialogTitle>
+                      <DialogDescription>
+                        Import users from CSV or JSON format. New users will receive generated passwords.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    {lastImportCredentials ? (
+                      <div className="space-y-4 mt-4">
+                        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <p className="text-green-400 font-medium mb-2">Users imported successfully!</p>
+                          <p className="text-sm text-gray-400">
+                            Download the CSV file containing user emails and their one-time passwords. 
+                            This is a ONE-TIME download - passwords will not be shown again.
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={handleDownloadImportCredentials}
+                          className="w-full bg-green-600 hover:bg-green-700"
+                          data-testid="download-credentials-btn"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Credentials CSV (One-Time)
+                        </Button>
+                      </div>
+                    ) : (
+                      <Tabs value={importMethod} onValueChange={setImportMethod} className="mt-4">
+                        <TabsList className="bg-[#1E1E1E] border border-white/10">
+                          <TabsTrigger value="json" data-testid="json-import-tab">JSON</TabsTrigger>
+                          <TabsTrigger value="csv" data-testid="csv-import-tab">CSV</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="json" className="space-y-4 mt-4">
+                          <div className="space-y-2">
+                            <Label>JSON Data</Label>
+                            <Textarea
+                              value={jsonInput}
+                              onChange={(e) => setJsonInput(e.target.value)}
+                              placeholder={sampleJson}
+                              className="min-h-[200px] font-mono text-sm bg-[#1E1E1E] border-white/10"
+                              data-testid="json-input"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Required: employee_email. Optional: employee_name, manager_email, department, is_admin
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <p className="text-xs text-blue-400">
+                              <strong>Note:</strong> New users will receive randomly generated passwords. 
+                              After import, you'll be able to download a CSV with the credentials for mail merge.
+                            </p>
+                          </div>
+                          <Button 
+                            onClick={handleJsonImport} 
+                            disabled={importing}
+                            className="w-full bg-[#007AFF] hover:bg-[#007AFF]/90"
+                            data-testid="import-json-btn"
+                          >
+                            {importing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Import JSON
+                          </Button>
+                        </TabsContent>
+                        
+                        <TabsContent value="csv" className="space-y-4 mt-4">
+                          <div className="space-y-2">
+                            <Label>CSV File</Label>
+                            <div className="border-2 border-dashed border-white/10 rounded-lg p-8 text-center">
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".csv"
+                                onChange={handleCsvImport}
+                                className="hidden"
+                                id="csv-upload"
+                                data-testid="csv-input"
+                              />
+                              <label htmlFor="csv-upload" className="cursor-pointer">
+                                <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
+                                <p className="text-gray-400">Click to upload CSV file</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Headers: employee_email, employee_name, manager_email, department, is_admin
+                                </p>
+                              </label>
+                            </div>
+                            {importing && (
+                              <div className="flex items-center justify-center gap-2 text-gray-400">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Importing...
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <p className="text-xs text-blue-400">
+                              <strong>Note:</strong> New users will receive randomly generated passwords. 
+                              After import, you'll be able to download a CSV with the credentials for mail merge.
+                            </p>
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    )}
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             <Card className="bg-[#121212] border-white/5">
@@ -300,6 +523,7 @@ const AdminPage = () => {
                       <TableHead className="text-gray-400">Department</TableHead>
                       <TableHead className="text-gray-400">Manager</TableHead>
                       <TableHead className="text-gray-400">Roles</TableHead>
+                      <TableHead className="text-gray-400">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -327,6 +551,17 @@ const AdminPage = () => {
                               </Badge>
                             ))}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.must_change_password ? (
+                            <Badge variant="outline" className="border-yellow-500/30 text-yellow-400">
+                              Pending
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-green-500/30 text-green-400">
+                              Active
+                            </Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
