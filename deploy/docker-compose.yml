@@ -40,10 +40,8 @@ services:
       - DB_NAME=${DB_NAME:-hr_performance}
       # CORS - must be explicit, no wildcards in staging/production
       - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS is required}
-      # Auth configuration
-      - AUTH_MODE=${AUTH_MODE:-email}
-      - DEV_VERIFICATION_CODE=${DEV_VERIFICATION_CODE:-}
-      - SHOW_CODE_IN_RESPONSE=${SHOW_CODE_IN_RESPONSE:-false}
+      # Auth configuration - password-based authentication
+      - AUTH_MODE=${AUTH_MODE:-password}
       - SESSION_EXPIRY_HOURS=${SESSION_EXPIRY_HOURS:-8}
       # Cookie security
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
