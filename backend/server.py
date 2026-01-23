@@ -31,9 +31,13 @@ db = client[os.environ['DB_NAME']]
 
 # Auth configuration
 AUTH_MODE = os.environ.get('AUTH_MODE', 'email')  # 'email' or 'entra'
-DEV_VERIFICATION_CODE = os.environ.get('DEV_VERIFICATION_CODE', None)  # Fixed code for dev
-SHOW_CODE_IN_RESPONSE = os.environ.get('SHOW_CODE_IN_RESPONSE', 'true').lower() == 'true'
-SESSION_EXPIRY_HOURS = int(os.environ.get('SESSION_EXPIRY_HOURS', '24'))
+DEV_VERIFICATION_CODE = os.environ.get('DEV_VERIFICATION_CODE', None) or None  # Fixed code for dev (empty string = None)
+SHOW_CODE_IN_RESPONSE = os.environ.get('SHOW_CODE_IN_RESPONSE', 'false').lower() == 'true'  # Default FALSE for security
+SESSION_EXPIRY_HOURS = int(os.environ.get('SESSION_EXPIRY_HOURS', '8'))  # Shorter default for security
+
+# Cookie security settings
+COOKIE_SECURE = os.environ.get('COOKIE_SECURE', 'true').lower() == 'true'  # Default TRUE for HTTPS
+COOKIE_SAMESITE = os.environ.get('COOKIE_SAMESITE', 'lax')  # 'lax', 'strict', or 'none'
 
 # Entra SSO config (scaffold - not enabled by default)
 ENTRA_TENANT_ID = os.environ.get('ENTRA_TENANT_ID', '')
