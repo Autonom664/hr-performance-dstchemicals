@@ -1,0 +1,217 @@
+<analysis>**original_problem_statement:**
+The user wants to build a portable, self-hostable HR Performance Management web app.
+
+**PRODUCT REQUIREMENTS:**
+- **MVP:**
+    - A full-stack application (React, FastAPI, MongoDB) deployable with Docker.
+    - User and hierarchy management via CSV/JSON import.
+    - Role-based authorization: Admin, Manager, Employee.
+    - Performance Cycles (e.g., 2026 EDI) and Conversations.
+    - Employee, Manager, and Admin dashboards.
+    - PDF export for conversations.
+- **Auth:**
+    - Initial MVP with email-only login.
+    - Scaffold for Entra SSO, but keep it disabled.
+- **Hardening for Staging (OVH):**
+    - Secure MongoDB, harden CORS, and refine Docker/Nginx configurations.
+    - Ensure all configurations are via environment variables.
+    - Create comprehensive documentation (, ) for deployment.
+- **Latest Refactoring (Production Readiness):**
+    - **Password Management:** Replace simulated login with a full password-based system. On user import, generate secure random passwords, hash them, and force a password change on the user's first login. Admins should be able to export a one-time list of these passwords and also reset passwords for existing users.
+    - **Remove Ratings:** Completely remove all numeric rating fields from the data model, APIs, UI, and PDF exports.
+    - **Update Conversation Structure:** Replace the old form fields with a new, specific set of questions for the employee and a single Your Feedback field for the manager.
+    - **Historical Access:** Allow users to view their read-only archived conversations from previous cycles.
+    - **Cleanup:** Remove all test artifacts and dead code for a clean, production-ready repository.
+
+**User's preferred language**: English
+
+**what currently exists?**
+A full-stack HR Performance Management application has been built with a FastAPI backend, React frontend, and MongoDB database. The initial MVP, including user/cycle management and basic dashboards, was completed. The system then underwent two significant hardening phases to improve security (MongoDB auth, CORS), portability for OVH deployment (Docker/Nginx refinement), and documentation. The frontend was refactored to use a Tiptap-based rich text editor and to support same-origin API calls. The application is now at a stable point but is pending a major refactoring based on the latest user request to implement a full password-based authentication system and revise the core conversation structure.
+
+**Last working item**:
+    - Last item agent was working: The agent was about to begin a major refactoring of the entire application based on the user's latest and most critical requirements. The plan was to start by completely rewriting the backend logic in  to introduce a password-based authentication system, remove the ratings feature, and implement a new data structure for conversations. The agent had just reviewed the existing code to gather context for this large-scale change.
+    - Status: NOT STARTED
+    - Agent Testing Done: N
+    - Which testing method agent to use? both
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:
+The following issues are derived from the latest user request and represent the immediate work to be done.
+
+  - **Issue 1: Implement Full Password-Based Authentication (P0)**
+     - Attempted fixes: None. This is a new feature request.
+     - Next debug checklist: This is a feature implementation, not a bug. The agent needs to modify  to hash passwords on user import/creation, add a password field to the user model, create endpoints for login and password changes, and implement a force password change on first login flag.
+     - Why fix this issue and what will be achieved with the fix?: This replaces the MVP's simulated login with a production-ready, secure authentication system, which is a critical step for deployment.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: None
+
+  - **Issue 2: Remove Ratings Feature Completely (P1)**
+     - Attempted fixes: None.
+     - Next debug checklist: The agent must search and remove all occurrences of rating or ratings from the backend models (), API endpoints, frontend components (dashboards, forms), and the PDF generation logic in .
+     - Why fix this issue and what will be achieved with the fix?: To align the application with the user's updated product vision, simplifying the performance review process.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: None
+
+  - **Issue 3: Implement New Conversation and Feedback Structure (P1)**
+     - Attempted fixes: None.
+     - Next debug checklist: The agent needs to update the  model in  to match the new fields. The frontend pages  and  must be updated to display the new form structure and corresponding data. The PDF export function also needs to be updated.
+     - Why fix this issue and what will be achieved with the fix?: This implements the core business logic for the performance review, as specified by the user's latest requirements.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: None
+
+**In progress Task List**:
+  - **Task 1: Major Application Refactoring for Production Readiness (P0)**
+     - Where to resume: The agent should start by creating a new version of  that incorporates all the new requirements: password auth, new conversation model, and removal of ratings.
+     - What will be achieved with this?: The application will be brought in line with the final pre-deployment requirements, making it feature-complete for the initial production launch.
+     - Status: IN PROGRESS
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on something: None.
+
+**Upcoming and Future Tasks**
+    - **Upcoming Tasks:**
+        - **Implement Historical/Archived EDI Access (P1):** Modify backend APIs and frontend pages to allow employees and managers to view their read-only conversations from archived cycles.
+        - **Documentation Overhaul (P2):** Update  and  to reflect the new password authentication flow, the updated data model, and all other changes.
+        - **Repository Cleanup (P2):** Before finishing, remove all temporary test files (), unused scripts, and any orphaned code to ensure the repository is clean for handover.
+    - **Future Tasks:**
+        - **Enable Entra SSO (P1):** Implement the final logic to switch  to  and enable Microsoft Entra ID for authentication, replacing the password-based system.
+
+**Completed work in this session**
+- **MVP Implementation:**
+  - Full-stack application structure with React, FastAPI, and MongoDB.
+  - Docker Compose setup for portable deployment.
+  - User import, performance cycle management, and conversation CRUD.
+  - Role-based dashboards for Employee, Manager, and Admin.
+  - PDF export of conversations using .
+  - Tiptap-based rich text editor integration.
+- **Security & Deployment Hardening:**
+  - Secured MongoDB with authentication and restricted network access.
+  - Hardened CORS policy and made session cookies  and .
+  - Refined Docker and Nginx configurations for production-readiness.
+  - Refactored frontend to use same-origin  calls, removing hardcoded URLs.
+- **Documentation:**
+  - Created a detailed  with architecture, setup, and deployment instructions.
+  - Created  to document manual steps required for OVH deployment (DNS, TLS, etc.).
+  - Created and updated a  file.
+
+**Earlier issues found/mentioned but not fixed**
+   - **Issue 1: PDF generation with WeasyPrint**
+     - The agent initially tried to use  for PDF generation but it failed due to missing system dependencies () in the environment.
+     - Debug checklist: As a workaround, the agent successfully switched to . If higher-fidelity PDF rendering is required in the future, the  dependency issue would need to be revisited, possibly by creating a custom Docker image with the required libraries installed.
+     - Why to solve this issue and what will be achieved with this?:  offers better CSS support and can generate more visually appealing PDFs directly from HTML, which might be a future requirement. For now,  is considered sufficient.
+     - Should Test frontend/backend/both after fix: backend
+     - Is recurring issue? N
+
+**Known issue recurrence from previous fork**
+  - N/A
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Backend:** FastAPI (Python)
+- **Frontend:** React.js
+- **Database:** MongoDB
+- **Containerization:** Docker, Docker Compose
+- **Authentication:** JWT-based sessions (to be updated to a full password system). Scaffolding for OAuth 2.0 (Entra ID) exists.
+- **Deployment:** Reverse proxy setup using Nginx.
+
+**key DB schema**
+- **users:** 
+- **cycles:** 
+- **conversations:**  (Note: The exact fields for reviews/goals are pending replacement based on the latest requirements).
+
+**changes in tech stack**
+-  was replaced with a custom rich text editor built on .
+- 
+-----
+
+WeasyPrint could not import some external libraries. Please carefully follow the installation steps before reporting an issue:
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting 
+
+----- was replaced by  for PDF generation due to system dependency issues.
+
+**All files of reference**
+- : The core FastAPI application logic, including all API endpoints, database models, and business rules. (To be heavily modified).
+- : Manages frontend authentication state and API calls. (To be modified for password login).
+- : The main pages of the application, which will require significant UI updates.
+- : Defines the services (frontend, backend, db) for deployment.
+- : The primary documentation for the project.
+- : Contains manual, environment-specific steps for deployment on OVH.
+
+**Areas that need refactoring**:
+The entire application is currently designated for a major refactoring to implement the latest user requirements, focusing on the authentication system and the structure of performance conversations.
+
+**key api endpoints**
+(Based on upcoming changes)
+- **Auth:**
+  - : User login with email and password.
+  - : Forced password change for first-time login.
+  - : Get current user details.
+- **Admin:**
+  - : Import users and generate initial passwords.
+  - : Export the one-time password list.
+  - : Reset a password for a specific user.
+- **App:**
+  - : Get the current active performance cycle.
+  - : Get a list of archived cycles for the user.
+  - : Get the employee's conversation for the active cycle.
+  - : Update the employee's conversation.
+  - : Get a specific conversation (used for archived views).
+
+**Critical Info for New Agent**
+- You are starting a major refactoring task. The previous implementation of authentication (simulated codes) and conversation forms is now obsolete.
+- Your primary goal is to implement the features detailed in the last user message (message 176), starting with a secure, password-based authentication system.
+- All ratings-related logic and fields must be purged from the entire codebase.
+- The conversation data model and UI must be updated to the new, simplified structure.
+- Entra SSO integration remains scaffolded but disabled. Do not implement it now.
+- Keep  and  updated with every significant change. The final state of the repository must be clean and production-ready.
+
+**documents and test reports created in this job**
+- 
+- 
+- 
+- 
+- 
+- 
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **User Request:** Final production readiness push. Key requirements:
+    *   Implement full password-based authentication (generate on import, force change on first login).
+    *   Allow admins to export one-time passwords and reset passwords.
+    *   Completely remove all ratings fields.
+    *   Update employee/manager input fields to a new, specific structure.
+    *   Allow users to view their historical/archived EDIs.
+    *   Ensure all documentation is updated and the repository is cleaned of test artifacts.
+    *   **Status:** Pending. Agent is about to start this task.
+2.  **Agent Action:** Acknowledged the request and began analyzing the current codebase (, ) to prepare for the major refactoring.
+    *   **Status:** Completed.
+
+**Project Health Check:**
+- **Broken:** Nothing is technically broken, but the application does not meet the latest critical requirements and is pending a major overhaul.
+- **Mocked:** Entra SSO integration is scaffolded but disabled via the  environment variable.
+
+**3rd Party Integrations**
+- None beyond the core technology stack (FastAPI, React, MongoDB).
+
+**Testing status**
+  - Testing agent used after significant changes: YES
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None. Testing was done via the testing agent.
+  - Known regressions: None.
+
+**Credentials to test flow:**
+The  script populates the database with initial users. The login credentials are:
+- **Admin:** 
+- **Manager:** 
+- **Employee:** 
+(Note: Passwords are not yet implemented; the agent is about to add this feature. The login flow will change significantly.)
+
+**What agent forgot to execute**
+The agent has not forgotten any tasks. It is at the beginning of a large, planned refactoring effort based on the most recent user request.</analysis>

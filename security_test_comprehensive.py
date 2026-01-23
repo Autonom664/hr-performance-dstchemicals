@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 class HRSecurityTesterComprehensive:
-    def __init__(self, base_url="https://hr-performance-app-1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://evalflow-7.preview.emergentagent.com"):
         self.base_url = base_url
         self.session_tokens = {}
         self.tests_run = 0
