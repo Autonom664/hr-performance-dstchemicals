@@ -105,3 +105,51 @@ Build a portable HR Performance Management web app for yearly EDI/performance co
 
 ### Deployment Target
 - hr-staging.dstchemicals.com
+
+---
+
+## Deployment Hardening Update (2026-01-23)
+
+### Changes Made for OVH Deployment Risk Reduction
+
+**1. Docker Compose Hardening**
+- Backend port binds to `127.0.0.1:8001` only (not public)
+- Frontend port binds to `127.0.0.1:3000` only (not public)
+- nginx on host handles all external traffic
+
+**2. Same-Origin API Communication**
+- Frontend AuthContext now uses `getApiBaseUrl()` function
+- When `REACT_APP_BACKEND_URL` is empty, uses relative `/api` paths
+- No localhost URLs embedded in production builds
+
+**3. nginx Reverse Proxy Configuration**
+- HTTP→HTTPS redirect server block added
+- Proper proxy headers: `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`
+- PDF export timeouts: 120s read timeout
+- Location `/api/` with trailing slash correctly proxies to backend
+
+**4. Environment Variable Documentation**
+- Complete variable reference in README.md
+- Separation of committed templates vs actual .env files
+- .gitignore properly excludes .env but not .env.example templates
+
+**5. OVH Manual Tasks Documented**
+- Created `agent_instructions.md` with exact commands
+- DNS, TLS, firewall, nginx config all documented
+- Step-by-step checklist format
+
+### Files Created/Modified
+- `/app/deploy/docker-compose.yml` - localhost port binding
+- `/app/frontend/src/contexts/AuthContext.js` - same-origin API support
+- `/app/deploy/.env.example` - updated template with docs
+- `/app/deploy/.env.ovh.example` - staging template
+- `/app/.gitignore` - proper .env handling
+- `/app/README.md` - comprehensive deployment docs
+- `/app/agent_instructions.md` - OVH manual tasks
+
+### Verification
+- ✅ Health endpoint works via /api proxy
+- ✅ Login flow works
+- ✅ Dashboard accessible
+- ✅ PDF export works
+- ✅ SSO remains scaffold-only (AUTH_MODE=email)
