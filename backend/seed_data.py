@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
 Seed data script for HR Performance Management app.
-Run this to populate the database with demo data.
+Run this to populate the database with demo data including passwords.
+
+Demo accounts (password: Demo@123456):
+  - admin@company.com (Admin)
+  - engineering.lead@company.com (Manager)
+  - developer1@company.com (Employee)
 """
 
 import asyncio
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import uuid
+import bcrypt
 
 load_dotenv()
 
@@ -18,6 +24,13 @@ db_name = os.environ.get('DB_NAME', 'test_database')
 
 client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
+
+# Default demo password - all demo users will have this password
+DEMO_PASSWORD = "Demo@123456"
+
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 # Demo users with hierarchy
 DEMO_USERS = [
@@ -29,6 +42,7 @@ DEMO_USERS = [
         "manager_email": None,
         "roles": ["employee", "admin"],
         "is_active": True,
+        "must_change_password": False,  # Demo accounts don't require password change
     },
     {
         "id": str(uuid.uuid4()),
@@ -38,6 +52,7 @@ DEMO_USERS = [
         "manager_email": None,
         "roles": ["employee", "manager"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -47,6 +62,7 @@ DEMO_USERS = [
         "manager_email": "cto@company.com",
         "roles": ["employee", "manager"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -56,6 +72,7 @@ DEMO_USERS = [
         "manager_email": "engineering.lead@company.com",
         "roles": ["employee"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -65,6 +82,7 @@ DEMO_USERS = [
         "manager_email": "engineering.lead@company.com",
         "roles": ["employee"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -74,6 +92,7 @@ DEMO_USERS = [
         "manager_email": "engineering.lead@company.com",
         "roles": ["employee"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -83,6 +102,7 @@ DEMO_USERS = [
         "manager_email": None,
         "roles": ["employee", "manager"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -92,6 +112,7 @@ DEMO_USERS = [
         "manager_email": "marketing.head@company.com",
         "roles": ["employee"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -101,6 +122,7 @@ DEMO_USERS = [
         "manager_email": "marketing.head@company.com",
         "roles": ["employee"],
         "is_active": True,
+        "must_change_password": False,
     },
     {
         "id": str(uuid.uuid4()),
@@ -110,6 +132,7 @@ DEMO_USERS = [
         "manager_email": "admin@company.com",
         "roles": ["employee", "manager"],
         "is_active": True,
+        "must_change_password": False,
     },
 ]
 
@@ -124,47 +147,55 @@ DEMO_CYCLE = {
     "updated_at": datetime.now(timezone.utc).isoformat(),
 }
 
-# Demo conversations (sample data)
+# Demo conversations with NEW field structure (no ratings!)
 DEMO_CONVERSATIONS = [
     {
         "employee_email": "developer1@company.com",
         "status": "in_progress",
-        "employee_self_review": """<p><strong>Key Accomplishments:</strong></p>
+        "previous_goals_progress": """<p>Good progress on most goals:</p>
 <ul>
-<li>Successfully delivered the new authentication system ahead of schedule</li>
-<li>Mentored two junior developers on React best practices</li>
-<li>Reduced API response time by 40% through optimization</li>
-</ul>
-<p><strong>Challenges Overcome:</strong></p>
-<p>Navigated complex legacy code migration while maintaining 100% uptime.</p>""",
-        "goals_next_period": """<p><strong>Technical Goals:</strong></p>
-<ul>
+<li>Completed the React migration ahead of schedule</li>
+<li>Test coverage increased to 75%</li>
+<li>Still working on documentation improvements</li>
+</ul>""",
+        "status_since_last_meeting": """<p>Overall doing well. Had some challenges with the new CI/CD pipeline but resolved them.</p>""",
+        "new_goals": """<ul>
 <li>Lead the microservices architecture initiative</li>
 <li>Obtain AWS Solutions Architect certification</li>
-<li>Implement comprehensive test coverage (>80%)</li>
-</ul>
-<p><strong>Professional Development:</strong></p>
-<ul>
-<li>Present at team knowledge sharing sessions monthly</li>
-<li>Take on more code review responsibilities</li>
+<li>Reach 85% test coverage</li>
 </ul>""",
+        "how_to_achieve_goals": """<p>Plan to:</p>
+<ul>
+<li>Dedicate 2 hours weekly to AWS study</li>
+<li>Schedule architecture review sessions with team</li>
+<li>Add tests with each PR</li>
+</ul>""",
+        "support_needed": """<p>Would benefit from:</p>
+<ul>
+<li>Budget for AWS certification exam</li>
+<li>Time allocated for architecture design sessions</li>
+</ul>""",
+        "feedback_and_wishes": """<p>Really enjoying the technical challenges. Would love more opportunities to mentor junior developers.</p>""",
     },
     {
         "employee_email": "developer2@company.com",
         "status": "ready_for_manager",
-        "employee_self_review": """<p>This year has been transformative for my career growth.</p>
-<p><strong>Highlights:</strong></p>
+        "previous_goals_progress": """<p>All goals achieved or exceeded:</p>
 <ul>
 <li>Shipped 3 major features with zero production incidents</li>
-<li>Improved CI/CD pipeline reducing deployment time by 60%</li>
-<li>Built strong collaboration with the QA team</li>
+<li>Improved CI/CD pipeline - deployment time reduced by 60%</li>
+<li>Built strong collaboration with QA team</li>
 </ul>""",
-        "goals_next_period": """<ul>
+        "status_since_last_meeting": """<p>This year has been transformative for my career growth. Feeling ready for more responsibility.</p>""",
+        "new_goals": """<ul>
 <li>Transition to senior developer role</li>
 <li>Lead a cross-functional project</li>
 <li>Improve system monitoring and alerting</li>
 </ul>""",
-        "manager_review": """<p>Jordan has shown exceptional growth this year.</p>
+        "how_to_achieve_goals": """<p>Taking on more complex tasks, volunteering for leadership opportunities, and studying observability best practices.</p>""",
+        "support_needed": """<p>Would appreciate mentorship from a senior engineer on system design.</p>""",
+        "feedback_and_wishes": """<p>Happy with the team culture. Would like to see more cross-team collaboration opportunities.</p>""",
+        "manager_feedback": """<p>Jordan has shown exceptional growth this year.</p>
 <p><strong>Strengths:</strong></p>
 <ul>
 <li>Strong technical skills and problem-solving ability</li>
@@ -175,36 +206,35 @@ DEMO_CONVERSATIONS = [
 <ul>
 <li>Could benefit from more public speaking opportunities</li>
 <li>Ready for more leadership responsibilities</li>
-</ul>""",
-        "ratings": {
-            "performance": 4,
-            "collaboration": 5,
-            "growth": 4,
-        },
+</ul>
+<p>Recommending for promotion track.</p>""",
     },
     {
         "employee_email": "marketing1@company.com",
         "status": "completed",
-        "employee_self_review": """<p><strong>Campaign Results:</strong></p>
+        "previous_goals_progress": """<p>Exceeded all targets:</p>
 <ul>
-<li>Increased social media engagement by 150%</li>
-<li>Successfully launched Q3 product campaign</li>
+<li>Social media engagement up 150%</li>
+<li>Q3 campaign was our most successful ever</li>
 <li>Built partnerships with 5 key influencers</li>
 </ul>""",
-        "goals_next_period": """<ul>
+        "status_since_last_meeting": """<p>Feeling energized and ready to take on more strategic initiatives.</p>""",
+        "new_goals": """<ul>
 <li>Develop video content strategy</li>
 <li>Expand into TikTok marketing</li>
 <li>Improve lead conversion rate by 25%</li>
 </ul>""",
-        "manager_review": """<p>Chris has exceeded expectations in all areas this year.</p>
+        "how_to_achieve_goals": """<p>Planning to:</p>
+<ul>
+<li>Attend video marketing workshop</li>
+<li>Research TikTok best practices</li>
+<li>A/B test landing pages</li>
+</ul>""",
+        "support_needed": """<p>Budget for video production equipment and TikTok ads trial.</p>""",
+        "feedback_and_wishes": """<p>Love the creative freedom here. Would appreciate more data analytics support.</p>""",
+        "manager_feedback": """<p>Chris has exceeded expectations in all areas this year.</p>
 <p>The Q3 campaign was our most successful to date, and Chris's creative direction was instrumental in its success.</p>
 <p><strong>Recommendation:</strong> Ready for promotion to Senior Marketing Specialist.</p>""",
-        "ratings": {
-            "performance": 5,
-            "collaboration": 4,
-            "growth": 5,
-        },
-        "meeting_date": datetime.now(timezone.utc).isoformat(),
     },
 ]
 
@@ -213,7 +243,7 @@ async def seed_database():
     """Seed the database with demo data."""
     print("🌱 Starting database seed...")
     
-    # Clear existing data (optional - comment out to preserve data)
+    # Clear existing data
     print("  Clearing existing data...")
     await db.users.delete_many({})
     await db.cycles.delete_many({})
@@ -221,10 +251,14 @@ async def seed_database():
     await db.sessions.delete_many({})
     await db.verification_codes.delete_many({})
     
-    # Insert users
+    # Hash the demo password once
+    hashed_password = hash_password(DEMO_PASSWORD)
+    
+    # Insert users with hashed passwords
     print("  Inserting demo users...")
     now = datetime.now(timezone.utc).isoformat()
     for user in DEMO_USERS:
+        user["password_hash"] = hashed_password
         user["created_at"] = now
         user["updated_at"] = now
         await db.users.insert_one(user)
@@ -235,7 +269,7 @@ async def seed_database():
     await db.cycles.insert_one(DEMO_CYCLE)
     print(f"  ✓ Inserted cycle: {DEMO_CYCLE['name']}")
     
-    # Insert conversations
+    # Insert conversations with NEW field structure
     print("  Inserting demo conversations...")
     for conv_data in DEMO_CONVERSATIONS:
         user = await db.users.find_one({"email": conv_data["employee_email"]})
@@ -244,11 +278,16 @@ async def seed_database():
             "cycle_id": DEMO_CYCLE["id"],
             "employee_email": conv_data["employee_email"],
             "manager_email": user.get("manager_email") if user else None,
-            "meeting_date": conv_data.get("meeting_date"),
-            "employee_self_review": conv_data.get("employee_self_review", ""),
-            "manager_review": conv_data.get("manager_review", ""),
-            "goals_next_period": conv_data.get("goals_next_period", ""),
-            "ratings": conv_data.get("ratings", {}),
+            # New employee fields
+            "previous_goals_progress": conv_data.get("previous_goals_progress", ""),
+            "status_since_last_meeting": conv_data.get("status_since_last_meeting", ""),
+            "new_goals": conv_data.get("new_goals", ""),
+            "how_to_achieve_goals": conv_data.get("how_to_achieve_goals", ""),
+            "support_needed": conv_data.get("support_needed", ""),
+            "feedback_and_wishes": conv_data.get("feedback_and_wishes", ""),
+            # Manager field
+            "manager_feedback": conv_data.get("manager_feedback", ""),
+            # Status
             "status": conv_data.get("status", "not_started"),
             "updated_by_email": conv_data["employee_email"],
             "created_at": now,
@@ -264,14 +303,21 @@ async def seed_database():
     await db.conversations.create_index([("cycle_id", 1), ("manager_email", 1)])
     await db.cycles.create_index("status")
     await db.sessions.create_index("session_token")
+    await db.sessions.create_index("expires_at")
     print("  ✓ Indexes created")
     
     print("\n✅ Database seeded successfully!")
-    print("\n📋 Demo Accounts:")
-    print("  Admin:      admin@company.com")
-    print("  Manager:    engineering.lead@company.com")
-    print("  Employee:   developer1@company.com")
-    print("\n💡 Tip: Verification codes are displayed in the UI when SHOW_CODE_IN_RESPONSE=true")
+    print("\n" + "="*50)
+    print("📋 DEMO ACCOUNTS")
+    print("="*50)
+    print(f"Password for all accounts: {DEMO_PASSWORD}")
+    print("")
+    print("  👤 Admin:      admin@company.com")
+    print("  👤 Manager:    engineering.lead@company.com")
+    print("  👤 Employee:   developer1@company.com")
+    print("="*50)
+    print("\n💡 Note: In production, users receive generated passwords via admin import.")
+    print("   Demo accounts have must_change_password=False for convenience.")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export const ProtectedRoute = ({ children, requiredRoles = [] }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, mustChangePassword } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -16,6 +16,11 @@ export const ProtectedRoute = ({ children, requiredRoles = [] }) => {
   }
 
   if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If user must change password, redirect to login page for password change flow
+  if (mustChangePassword) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -38,7 +43,7 @@ export const ProtectedRoute = ({ children, requiredRoles = [] }) => {
 };
 
 export const PublicRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, mustChangePassword } = useAuth();
 
   if (loading) {
     return (
@@ -46,6 +51,11 @@ export const PublicRoute = ({ children }) => {
         <Loader2 className="w-8 h-8 animate-spin text-[#007AFF]" />
       </div>
     );
+  }
+
+  // If user must change password, let them stay on login page
+  if (user && mustChangePassword) {
+    return children;
   }
 
   if (user) {
