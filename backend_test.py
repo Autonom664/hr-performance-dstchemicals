@@ -480,10 +480,10 @@ class HRSecurityTester:
 
 def main():
     """Main test execution"""
-    tester = HRPerformanceAPITester()
+    tester = HRSecurityTester()
     
     try:
-        success = tester.run_full_test_suite()
+        success = tester.run_security_hardening_tests()
         return 0 if success else 1
     except KeyboardInterrupt:
         print("\n⏹️  Tests interrupted by user")
