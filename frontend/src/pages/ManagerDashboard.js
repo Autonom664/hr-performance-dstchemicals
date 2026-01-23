@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
+import RichTextEditor from '../components/RichTextEditor';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Loader2, Users, ChevronRight, FileText, Calendar, Star, Save, CheckCircle, Download, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 import {
   Select,
   SelectContent,
@@ -146,14 +145,6 @@ const ManagerDashboard = () => {
     }
   };
 
-  const quillModules = {
-    toolbar: [
-      ['bold', 'italic', 'underline'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['clean']
-    ],
-  };
-
   if (loading && !employeeEmail) {
     return (
       <Layout>
@@ -263,13 +254,11 @@ const ManagerDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <ReactQuill
-                theme="snow"
+              <RichTextEditor
                 value={managerReview}
                 onChange={setManagerReview}
-                modules={quillModules}
                 placeholder="Write your feedback here... Include strengths, areas for improvement, and recommendations."
-                readOnly={isCompleted}
+                disabled={isCompleted}
                 data-testid="manager-review-editor"
               />
 
