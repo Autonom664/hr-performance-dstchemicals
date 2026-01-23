@@ -1,24 +1,25 @@
 # HR Performance Management - Docker Compose
-# For local development and OVH deployment
+# For local development and OVH staging/production deployment
 
 version: '3.8'
 
 services:
-  # MongoDB Database
+  # MongoDB Database - Internal only, not exposed publicly
   mongodb:
     image: mongo:7.0
     container_name: hr-mongodb
     restart: unless-stopped
     environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-hrapp}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
       - MONGO_INITDB_DATABASE=${DB_NAME:-hr_performance}
     volumes:
       - mongodb_data:/data/db
-    ports:
-      - "27017:27017"
+    # NO ports exposed - MongoDB is internal only
     networks:
-      - hr-network
+      - hr-internal
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "-u", "${MONGO_ROOT_USERNAME:-hrapp}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,50 +32,64 @@ services:
     container_name: hr-backend
     restart: unless-stopped
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      # MongoDB with authentication
+      - MONGO_URL=mongodb://${MONGO_ROOT_USERNAME:-hrapp}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${DB_NAME:-hr_performance}?authSource=admin
       - DB_NAME=${DB_NAME:-hr_performance}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      # CORS - must be explicit, no wildcards in staging/production
+      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS is required}
+      # Auth configuration
       - AUTH_MODE=${AUTH_MODE:-email}
       - DEV_VERIFICATION_CODE=${DEV_VERIFICATION_CODE:-}
-      - SHOW_CODE_IN_RESPONSE=${SHOW_CODE_IN_RESPONSE:-true}
-      - SESSION_EXPIRY_HOURS=${SESSION_EXPIRY_HOURS:-24}
+      - SHOW_CODE_IN_RESPONSE=${SHOW_CODE_IN_RESPONSE:-false}
+      - SESSION_EXPIRY_HOURS=${SESSION_EXPIRY_HOURS:-8}
+      # Cookie security
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
+      # Entra SSO (scaffolded, disabled by default)
       - ENTRA_TENANT_ID=${ENTRA_TENANT_ID:-}
       - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID:-}
       - ENTRA_CLIENT_SECRET=${ENTRA_CLIENT_SECRET:-}
       - ENTRA_REDIRECT_URI=${ENTRA_REDIRECT_URI:-}
       - ENTRA_SCOPES=${ENTRA_SCOPES:-openid profile email}
     ports:
-      - "8001:8001"
+      - "${BACKEND_PORT:-8001}:8001"
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
-      - hr-network
+      - hr-internal
+      - hr-external
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # React Frontend
+  # React Frontend (Nginx)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-http://localhost:8001}
+        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:?REACT_APP_BACKEND_URL is required}
     container_name: hr-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
     networks:
-      - hr-network
+      - hr-external
 
 volumes:
   mongodb_data:
+    driver: local
 
 networks:
-  hr-network:
+  # Internal network for MongoDB - not accessible from outside
+  hr-internal:
+    driver: bridge
+    internal: true
+  # External network for frontend/backend communication
+  hr-external:
     driver: bridge
