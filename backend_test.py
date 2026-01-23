@@ -3,17 +3,19 @@
 import requests
 import sys
 import json
+import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-class HRPerformanceAPITester:
+class HRSecurityTester:
     def __init__(self, base_url="https://hr-performance-app-1.preview.emergentagent.com"):
         self.base_url = base_url
-        self.session_token = None
+        self.session_tokens = {}  # Store multiple user sessions
         self.current_user = None
         self.tests_run = 0
         self.tests_passed = 0
         self.test_results = []
+        self.test_conversations = {}  # Store conversation IDs for testing
 
     def log_test(self, name: str, success: bool, details: str = ""):
         """Log test result"""
