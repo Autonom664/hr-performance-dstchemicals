@@ -162,12 +162,18 @@ class ManagerConversationUpdate(BaseModel):
 
 # ============ AUTH HELPERS ============
 async def get_current_user(request: Request) -> Optional[User]:
-    """Get current user from session cookie or header."""
+    """Get current user from session cookie, header, or query parameter."""
     session_token = request.cookies.get("session_token")
+    
+    # Try Authorization header
     if not session_token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             session_token = auth_header.split(" ")[1]
+    
+    # Try query parameter (for PDF downloads via browser)
+    if not session_token:
+        session_token = request.query_params.get("token")
     
     if not session_token:
         return None
