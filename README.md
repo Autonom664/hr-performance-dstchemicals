@@ -2,47 +2,65 @@
 
 A portable, self-hosted HR Performance Management web application for annual performance reviews and EDI conversations. Designed for 80-200 users with Docker-based deployment.
 
+**Repository:** `https://github.com/Autonom664/HR` (private)  
+**Target Staging Domain:** `hr-staging.dstchemicals.com`
+
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [Quick Start](#quick-start)
-- [Environment Configuration](#environment-configuration)
+- [Finding & Configuring Environment Variables](#finding--configuring-environment-variables)
+- [Environment Variables Reference](#environment-variables-reference)
 - [Authentication](#authentication)
 - [Security Configuration](#security-configuration)
 - [Deployment](#deployment)
+- [Reverse Proxy Configuration](#reverse-proxy-configuration)
 - [API Reference](#api-reference)
 - [Staging Sanity Checks](#staging-sanity-checks)
+- [Known Limitations](#known-limitations)
 
 ---
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        External Network                          │
-├─────────────────────────────────────────────────────────────────┤
-│   ┌─────────────┐              ┌─────────────┐                  │
-│   │   Frontend  │◄────────────►│   Backend   │                  │
-│   │   (React)   │   REST API   │  (FastAPI)  │                  │
-│   │   Port 3000 │              │   Port 8001 │                  │
-│   └─────────────┘              └──────┬──────┘                  │
-│                                       │                          │
-├───────────────────────────────────────┼─────────────────────────┤
-│                        Internal Network (isolated)               │
-│                                       │                          │
-│                                ┌──────▼──────┐                  │
-│                                │   MongoDB   │                  │
-│                                │   Port 27017│                  │
-│                                │  (internal) │                  │
-│                                └─────────────┘                  │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌─────────────────────────────────────────┐
+                    │           OVH Server                     │
+                    │                                          │
+    Internet        │   ┌─────────────────────────────────┐   │
+        │           │   │         nginx (ports 80/443)     │   │
+        │           │   │   - TLS termination              │   │
+        ▼           │   │   - HTTP→HTTPS redirect          │   │
+   ┌─────────┐      │   │   - Reverse proxy                │   │
+   │ Browser │◄────►│   └─────────────┬───────────────────┘   │
+   └─────────┘      │                 │                        │
+                    │    ┌────────────┴────────────┐          │
+                    │    │                         │          │
+                    │    ▼                         ▼          │
+                    │ ┌──────────┐          ┌──────────┐      │
+                    │ │ Frontend │          │ Backend  │      │
+                    │ │ :3000    │          │ :8001    │      │
+                    │ │ (local)  │          │ (local)  │      │
+                    │ └──────────┘          └────┬─────┘      │
+                    │                            │            │
+                    │                     ┌──────▼─────┐      │
+                    │                     │  MongoDB   │      │
+                    │                     │  (internal)│      │
+                    │                     └────────────┘      │
+                    └─────────────────────────────────────────┘
+
+Port Exposure:
+- Public:  80 (nginx→HTTPS redirect), 443 (nginx→TLS)
+- Private: 127.0.0.1:3000 (frontend), 127.0.0.1:8001 (backend)
+- Internal: MongoDB (no host port binding)
 ```
 
 **Stack:**
-- **Frontend**: React 19, Tailwind CSS, shadcn/ui, Tiptap rich text editor
-- **Backend**: FastAPI (Python 3.11), Motor (async MongoDB driver)
-- **Database**: MongoDB 7.0 (with authentication, internal network only)
-- **PDF Generation**: fpdf2
+- **Frontend:** React 19, Tailwind CSS, shadcn/ui, Tiptap rich text editor
+- **Backend:** FastAPI (Python 3.11), Motor (async MongoDB driver)
+- **Database:** MongoDB 7.0 (with authentication, internal network only)
+- **PDF Generation:** fpdf2
+- **Reverse Proxy:** nginx (TLS termination, routing)
 
 ---
 
@@ -55,18 +73,18 @@ A portable, self-hosted HR Performance Management web application for annual per
 ### Local Development
 
 ```bash
-# Clone and navigate
-cd /path/to/hr-performance-app
+# Clone repository
+git clone https://github.com/Autonom664/HR.git hr-performance
+cd hr-performance/deploy
 
 # Copy and configure environment
-cd deploy
 cp .env.example .env
-# Edit .env with your values (dev defaults work for local testing)
+# Edit .env - defaults work for local testing
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
-# Seed demo data (optional)
+# Seed demo data (first time)
 docker exec hr-backend python seed_data.py
 
 # Access the app
@@ -75,6 +93,7 @@ docker exec hr-backend python seed_data.py
 ```
 
 ### Demo Accounts (after seeding)
+
 | Role | Email | Notes |
 |------|-------|-------|
 | Admin | admin@company.com | Full system access |
@@ -83,43 +102,96 @@ docker exec hr-backend python seed_data.py
 
 ---
 
-## Environment Configuration
+## Finding & Configuring Environment Variables
 
-### Required Variables
+### Repository Structure
 
-| Variable | Description | Local Default | Production |
-|----------|-------------|---------------|------------|
-| `MONGO_ROOT_USERNAME` | MongoDB admin username | `hrapp_dev` | Use strong username |
-| `MONGO_ROOT_PASSWORD` | MongoDB admin password | (set in .env) | **Strong password required** |
+```
+/deploy/
+├── .env.example        # Template for LOCAL development (committed)
+├── .env.ovh.example    # Template for OVH staging/production (committed)
+├── .env                # YOUR actual values (NOT committed, in .gitignore)
+├── docker-compose.yml  # Docker services configuration
+├── backend/
+│   └── Dockerfile
+└── frontend/
+    └── Dockerfile
+```
+
+### Template Files (Safe to Commit)
+
+| File | Purpose | Contains Secrets? |
+|------|---------|-------------------|
+| `/deploy/.env.example` | Local development template | No (placeholders only) |
+| `/deploy/.env.ovh.example` | OVH staging template | No (placeholders only) |
+
+### Actual Configuration (Never Commit)
+
+| File | Purpose | Location |
+|------|---------|----------|
+| `/deploy/.env` | Active configuration | Created from template, contains real values |
+
+### How to Configure
+
+**Local Development:**
+```bash
+cd deploy
+cp .env.example .env
+# Edit .env with your values (defaults mostly work)
+```
+
+**OVH Staging:**
+```bash
+cd /opt/hr-performance/deploy
+cp .env.ovh.example .env
+nano .env
+# Set MONGO_ROOT_PASSWORD to a strong random value
+# Other values are pre-configured for staging
+```
+
+---
+
+## Environment Variables Reference
+
+### Complete Variable List
+
+| Variable | Description | Local Default | OVH Staging |
+|----------|-------------|---------------|-------------|
+| **Database** |
+| `MONGO_ROOT_USERNAME` | MongoDB admin username | `hrapp_dev` | `hrapp_prod` |
+| `MONGO_ROOT_PASSWORD` | MongoDB admin password | (set in .env) | **Strong password (32+ chars)** |
 | `DB_NAME` | Database name | `hr_performance` | `hr_performance` |
-| `REACT_APP_BACKEND_URL` | Backend URL for frontend | `http://localhost:8001` | `https://hr-staging.dstchemicals.com` |
-| `CORS_ORIGINS` | Allowed origins (comma-separated) | `http://localhost:3000` | `https://hr-staging.dstchemicals.com` |
-
-### Authentication Variables
-
-| Variable | Description | Local Default | Production |
-|----------|-------------|---------------|------------|
-| `AUTH_MODE` | `email` or `entra` | `email` | `email` |
+| **URLs & CORS** |
+| `REACT_APP_BACKEND_URL` | Backend URL for frontend | `http://localhost:8001` | (empty) - uses relative `/api` |
+| `CORS_ORIGINS` | Allowed CORS origins | `http://localhost:3000` | `https://hr-staging.dstchemicals.com` |
+| **Ports** |
+| `BACKEND_PORT` | Backend container port | `8001` | `8001` |
+| `FRONTEND_PORT` | Frontend container port | `3000` | `3000` |
+| **Authentication** |
+| `AUTH_MODE` | Auth method: `email` or `entra` | `email` | `email` |
 | `SHOW_CODE_IN_RESPONSE` | Show verification code in API | `true` | **`false`** |
 | `DEV_VERIFICATION_CODE` | Fixed code for testing | `123456` | (empty) |
-| `SESSION_EXPIRY_HOURS` | Session lifetime | `24` | `8` |
-
-### Cookie Security Variables
-
-| Variable | Description | Local Default | Production |
-|----------|-------------|---------------|------------|
+| `SESSION_EXPIRY_HOURS` | Session lifetime in hours | `24` | `8` |
+| **Cookie Security** |
 | `COOKIE_SECURE` | Require HTTPS for cookies | `false` | **`true`** |
 | `COOKIE_SAMESITE` | SameSite cookie policy | `lax` | `lax` |
+| **Entra SSO (scaffolded)** |
+| `ENTRA_TENANT_ID` | Microsoft Entra tenant ID | (empty) | (empty) |
+| `ENTRA_CLIENT_ID` | App registration client ID | (empty) | (empty) |
+| `ENTRA_CLIENT_SECRET` | App registration secret | (empty) | (empty) |
+| `ENTRA_REDIRECT_URI` | OAuth callback URL | (empty) | `https://hr-staging.dstchemicals.com/api/auth/entra/callback` |
+| `ENTRA_SCOPES` | OAuth scopes | `openid profile email` | `openid profile email` |
 
-### Entra SSO Variables (Scaffolded, Not Enabled)
+### Critical Security Settings for Staging/Production
 
-| Variable | Description |
-|----------|-------------|
-| `ENTRA_TENANT_ID` | Microsoft Entra tenant ID |
-| `ENTRA_CLIENT_ID` | App registration client ID |
-| `ENTRA_CLIENT_SECRET` | App registration client secret |
-| `ENTRA_REDIRECT_URI` | OAuth callback URL |
-| `ENTRA_SCOPES` | OAuth scopes (default: `openid profile email`) |
+```env
+# These MUST be set correctly for staging:
+MONGO_ROOT_PASSWORD=<strong-random-password-32-chars>
+REACT_APP_BACKEND_URL=                    # Empty = uses /api
+CORS_ORIGINS=https://hr-staging.dstchemicals.com
+SHOW_CODE_IN_RESPONSE=false               # NEVER true in staging
+COOKIE_SECURE=true                        # ALWAYS true with HTTPS
+```
 
 ---
 
@@ -127,7 +199,7 @@ docker exec hr-backend python seed_data.py
 
 ### Email Authentication (Active)
 
-The current authentication method uses email-based verification codes:
+Current authentication uses email-based verification codes:
 
 1. User enters email address
 2. System generates 6-digit code (stored in DB, expires in 10 minutes)
@@ -135,169 +207,187 @@ The current authentication method uses email-based verification codes:
 4. Session created with httpOnly cookie
 
 **Development Mode:**
-- Set `SHOW_CODE_IN_RESPONSE=true` to display code in UI
-- Set `DEV_VERIFICATION_CODE=123456` to use a fixed code
+- `SHOW_CODE_IN_RESPONSE=true` displays code in UI
+- `DEV_VERIFICATION_CODE=123456` uses fixed code
 
-**Production Mode:**
-- `SHOW_CODE_IN_RESPONSE=false` (codes not exposed)
-- `DEV_VERIFICATION_CODE=` (empty, random codes generated)
-- In production, codes would be sent via email (not implemented in MVP)
+**Staging/Production Mode:**
+- `SHOW_CODE_IN_RESPONSE=false` - codes not exposed
+- `DEV_VERIFICATION_CODE=` empty - random codes generated
+- Note: Email delivery not implemented; use admin import for users
 
 ### Microsoft Entra SSO (Scaffolded, Disabled)
 
-Entra ID integration is scaffolded but disabled by default. To enable:
-
-1. Register app in Azure Portal → Microsoft Entra ID → App registrations
-2. Set redirect URI: `https://your-domain.com/api/auth/entra/callback`
-3. Configure environment:
-   ```env
-   AUTH_MODE=entra
-   ENTRA_TENANT_ID=your-tenant-id
-   ENTRA_CLIENT_ID=your-client-id
-   ENTRA_CLIENT_SECRET=your-secret
-   ENTRA_REDIRECT_URI=https://your-domain.com/api/auth/entra/callback
-   ```
-4. Restart backend service
-
-**Important:** Users must exist in the system (imported via admin panel) before they can log in via Entra. OAuth only identifies users; authorization is based on imported user data.
+Entra ID integration is scaffolded but disabled by default. See `/deploy/.env.ovh.example` for configuration instructions.
 
 ---
 
 ## Security Configuration
 
+### Port Exposure Model
+
+| Component | Local Dev | OVH Staging | Notes |
+|-----------|-----------|-------------|-------|
+| nginx | N/A | 80, 443 (public) | TLS termination |
+| Frontend | 3000 (public) | 127.0.0.1:3000 | nginx proxies |
+| Backend | 8001 (public) | 127.0.0.1:8001 | nginx proxies |
+| MongoDB | internal only | internal only | Never exposed |
+
 ### MongoDB Security
 
-MongoDB is configured with authentication and runs on an internal Docker network:
-
-- **Not exposed publicly** - no port binding to host
-- **Authentication required** - uses `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD`
+- **Not exposed publicly** - no host port binding
+- **Authentication required** - uses `MONGO_ROOT_USERNAME/PASSWORD`
 - **Internal network** - only accessible by backend container
-
-The connection string format:
-```
-mongodb://<username>:<password>@mongodb:27017/<database>?authSource=admin
-```
-
-### CORS Configuration
-
-CORS is configured via the `CORS_ORIGINS` environment variable:
-
-**Local Development:**
-```env
-CORS_ORIGINS=http://localhost:3000
-```
-
-**Staging (hr-staging.dstchemicals.com):**
-```env
-CORS_ORIGINS=https://hr-staging.dstchemicals.com
-```
-
-**Multiple origins (if needed):**
-```env
-CORS_ORIGINS=https://hr-staging.dstchemicals.com,https://www.hr-staging.dstchemicals.com
-```
-
-⚠️ **Never use wildcards (`*`) in staging or production.**
 
 ### Session Security
 
-- Sessions are stored in MongoDB with expiration
-- Session tokens are generated using `secrets.token_urlsafe(32)`
-- Cookies are:
-  - `httpOnly=true` (not accessible via JavaScript)
-  - `secure=true` in production (HTTPS only)
-  - `samesite=lax` (CSRF protection)
-- Sessions are invalidated on logout
-- Expired sessions are rejected at API level
-
-### Authorization Model
-
-Authorization is strictly enforced server-side:
-
-| Role | Permissions |
-|------|-------------|
-| Employee | View/edit own conversation only |
-| Manager | View/edit direct reports' conversations |
-| Admin | Full access to all data |
-
-Authorization checks are performed on every API request based on the imported user hierarchy, not OAuth claims.
+- Sessions stored in MongoDB with expiration
+- Session tokens: `secrets.token_urlsafe(32)`
+- Cookies: `httpOnly=true`, `secure=true` (staging), `samesite=lax`
+- Sessions invalidated on logout
+- Expired sessions rejected at API level
 
 ---
 
 ## Deployment
 
-### OVH Staging Deployment
+### OVH Staging Deployment Checklist
 
-1. **Prepare server:**
-   ```bash
-   # Install Docker
-   curl -fsSL https://get.docker.com | sh
-   
-   # Clone repository
-   git clone <repo-url> /opt/hr-performance
-   cd /opt/hr-performance/deploy
-   ```
+See **[agent_instructions.md](./agent_instructions.md)** for detailed OVH-specific commands and configurations that cannot be done inside Emergent.
 
-2. **Configure environment:**
-   ```bash
-   cp .env.ovh.example .env
-   # Edit .env with production values
-   nano .env
-   ```
+**Summary of required OVH manual tasks:**
 
-   Required changes:
-   ```env
-   MONGO_ROOT_PASSWORD=<strong-password-min-32-chars>
-   REACT_APP_BACKEND_URL=https://hr-staging.dstchemicals.com
-   CORS_ORIGINS=https://hr-staging.dstchemicals.com
-   SHOW_CODE_IN_RESPONSE=false
-   COOKIE_SECURE=true
-   ```
+1. **DNS:** Create A record for `hr-staging.dstchemicals.com`
+2. **Server prep:** Install Docker, nginx, certbot
+3. **Firewall:** Open only ports 80 and 443
+4. **TLS:** Obtain Let's Encrypt certificate
+5. **nginx:** Configure reverse proxy (see below)
+6. **Deploy:** Clone repo, configure `.env`, start containers
+7. **Verify:** Test health endpoint and login flow
 
-3. **Start services:**
-   ```bash
-   docker-compose up -d
-   ```
+### Docker Compose Usage
 
-4. **Configure reverse proxy (nginx/traefik):**
-   - Frontend: proxy to `localhost:3000`
-   - Backend: proxy `/api/*` to `localhost:8001`
+**Local Development:**
+```bash
+cd deploy
+cp .env.example .env
+docker compose up -d
+```
 
-5. **Seed initial data:**
-   ```bash
-   docker exec hr-backend python seed_data.py
-   ```
+**OVH Staging:**
+```bash
+cd /opt/hr-performance/deploy
+cp .env.ovh.example .env
+nano .env  # Set MONGO_ROOT_PASSWORD
+docker compose up -d --build
+```
 
-### Reverse Proxy Configuration (nginx example)
+---
+
+## Reverse Proxy Configuration
+
+### nginx Configuration for OVH
+
+**File location:** `/etc/nginx/sites-available/hr-staging`
 
 ```nginx
+# HTTP -> HTTPS redirect
+server {
+    listen 80;
+    listen [::]:80;
+    server_name hr-staging.dstchemicals.com;
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server
 server {
     listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name hr-staging.dstchemicals.com;
 
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
+    # TLS certificates (Let's Encrypt)
+    ssl_certificate /etc/letsencrypt/live/hr-staging.dstchemicals.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hr-staging.dstchemicals.com/privkey.pem;
+    
+    # Modern TLS configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
 
-    # Frontend
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # Backend API
-    location /api {
-        proxy_pass http://localhost:8001;
+    # Backend API - proxy to localhost:8001
+    # CRITICAL: location /api/ with trailing slash, proxy_pass also with /api/
+    location /api/ {
+        proxy_pass http://127.0.0.1:8001/api/;
         proxy_http_version 1.1;
+        
+        # Required proxy headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Timeouts for PDF export (can take longer)
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        
+        # Buffering
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 32k;
+        proxy_busy_buffers_size 64k;
     }
+
+    # Frontend - proxy to localhost:3000
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        
+        # Required proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Logging
+    access_log /var/log/nginx/hr-staging.access.log;
+    error_log /var/log/nginx/hr-staging.error.log;
 }
+```
+
+### Frontend API Communication
+
+The frontend uses **same-origin API calls** via nginx reverse proxy:
+
+- `REACT_APP_BACKEND_URL` is empty in staging
+- Frontend makes requests to relative `/api/*` paths
+- nginx proxies `/api/*` to backend at `127.0.0.1:8001`
+- No localhost URLs embedded in production builds
+
+**How it works:**
+```
+Browser → https://hr-staging.dstchemicals.com/api/health
+         → nginx → http://127.0.0.1:8001/api/health
+                 → backend responds
 ```
 
 ---
@@ -350,67 +440,55 @@ server {
 
 ## Staging Sanity Checks
 
-The following sanity checks have been verified for staging deployment on **2026-01-23**:
+Verified on **2026-01-23**:
 
-### 1. Authorization Isolation ✅ VERIFIED
+### 1. Authorization Isolation ✅
 
-| Test | Result | Details |
-|------|--------|---------|
-| Employee cannot access other employee's conversation by ID | ✅ PASS | Returns 403 Forbidden |
-| Employee cannot access conversation via URL manipulation | ✅ PASS | Returns 403 Forbidden |
-| Employee cannot access manager endpoints | ✅ PASS | Returns 403 Forbidden |
-| Manager cannot access non-report's conversation | ✅ PASS | Returns 403 Forbidden |
-| Admin can access any conversation | ✅ PASS | Returns 200 OK |
+| Test | Result |
+|------|--------|
+| Employee cannot access other employee's conversation | ✅ 403 Forbidden |
+| Employee cannot access manager endpoints | ✅ 403 Forbidden |
+| Manager cannot access non-report's conversation | ✅ 403 Forbidden |
+| Admin can access any conversation | ✅ 200 OK |
 
-### 2. Session & Cookie Security ✅ VERIFIED
+### 2. Session & Cookie Security ✅
 
-| Test | Result | Details |
-|------|--------|---------|
-| Sessions use httpOnly cookies | ✅ PASS | `HttpOnly` flag present in Set-Cookie |
-| Secure cookie attributes | ✅ PASS | `SameSite=lax` attribute present |
-| Invalid token rejection | ✅ PASS | Returns 401 Unauthorized |
-| Session expiry enforcement | ✅ PASS | Expired sessions rejected |
-| Logout invalidates session | ✅ PASS | Token deleted from DB, becomes invalid |
+| Test | Result |
+|------|--------|
+| Sessions use httpOnly cookies | ✅ Verified |
+| Secure cookie attributes | ✅ SameSite=lax |
+| Invalid token rejection | ✅ 401 Unauthorized |
+| Logout invalidates session | ✅ Token deleted |
 
-### 3. Cycle Integrity ✅ VERIFIED
+### 3. Cycle Integrity ✅
 
-| Test | Result | Details |
-|------|--------|---------|
-| Only one active cycle at a time | ✅ PASS | Activating new cycle archives existing active |
-| Status transitions work correctly | ✅ PASS | Draft → Active → Archived |
-| Cannot have multiple active cycles | ✅ PASS | Previous active auto-archived |
+| Test | Result |
+|------|--------|
+| Only one active cycle at a time | ✅ Previous archived |
+| Status transitions work | ✅ Draft→Active→Archived |
 
-### 4. PDF Export Completeness ✅ VERIFIED
+### 4. PDF Export ✅
 
-| Test | Result | Details |
-|------|--------|---------|
-| PDF includes cycle information | ✅ PASS | Cycle name, start date, end date, status |
-| PDF includes employee details | ✅ PASS | Name, email, department |
-| PDF includes manager details | ✅ PASS | Manager name/email |
-| PDF includes self-review | ✅ PASS | Full employee_self_review content |
-| PDF includes goals | ✅ PASS | Full goals_next_period content |
-| PDF includes manager review | ✅ PASS | Full manager_review content |
-| PDF includes ratings | ✅ PASS | Performance, Collaboration, Growth (1-5) |
-| PDF includes timestamps | ✅ PASS | created_at, updated_at, updated_by |
-| PDF includes conversation ID | ✅ PASS | In footer for audit trail |
+| Test | Result |
+|------|--------|
+| Includes all fields | ✅ Verified |
+| Includes timestamps | ✅ Verified |
 
-### 5. Data Persistence & Restart Safety ✅ VERIFIED
+### 5. Data Persistence ✅
 
-| Test | Result | Details |
-|------|--------|---------|
-| Data persists after backend restart | ✅ PASS | Users, cycles, conversations intact |
-| Sessions valid after restart | ✅ PASS | Existing sessions continue working |
-| MongoDB data integrity | ✅ PASS | No data corruption observed |
-| Application recovers cleanly | ✅ PASS | Health check passes immediately |
+| Test | Result |
+|------|--------|
+| Data persists after restart | ✅ Verified |
+| Sessions valid after restart | ✅ Verified |
 
 ---
 
 ## Known Limitations
 
-1. **Email delivery not implemented** - Verification codes are displayed in UI (dev mode) or would need email service integration for production
-2. **No password reset** - Users are managed via admin import only
-3. **Single active cycle** - Only one performance cycle can be active at a time
-4. **No email notifications** - Status changes do not trigger emails
+1. **Email delivery not implemented** - Verification codes displayed in UI (dev mode only)
+2. **No password reset** - Users managed via admin import
+3. **Single active cycle** - Only one performance cycle active at a time
+4. **Entra SSO** - Scaffolded but not enabled (set `AUTH_MODE=entra` to enable)
 
 ---
 
