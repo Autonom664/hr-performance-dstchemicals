@@ -1,7 +1,27 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+// Determine API base URL:
+// - If REACT_APP_BACKEND_URL is set and non-empty, use it (for cross-origin or explicit config)
+// - Otherwise, use relative '/api' path (for same-origin deployment via nginx proxy)
+const getApiBaseUrl = () => {
+  const envUrl = process.env.REACT_APP_BACKEND_URL;
+  
+  // If env var is set and non-empty, use it
+  if (envUrl && envUrl.trim() !== '') {
+    // Ensure we append /api if not already present
+    const baseUrl = envUrl.trim();
+    if (baseUrl.endsWith('/api')) {
+      return baseUrl;
+    }
+    return `${baseUrl}/api`;
+  }
+  
+  // Default: same-origin relative path (nginx proxies /api to backend)
+  return '/api';
+};
+
+const API_URL = getApiBaseUrl();
 
 const AuthContext = createContext(null);
 
