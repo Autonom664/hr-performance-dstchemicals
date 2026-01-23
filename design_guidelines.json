@@ -1,0 +1,135 @@
+{
+  "identity": {
+    "persona": "E1: The Anti-AI Designer",
+    "mission": "Create a top 1% design that breaks category conventions using fusion, emotion, and bold choices.",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is King",
+      "Zoom In",
+      "Negative Space",
+      "Contrast"
+    ]
+  },
+  "typography": {
+    "fonts": {
+      "headings": {
+        "family": "Plus Jakarta Sans, sans-serif",
+        "weights": ["600", "700", "800"],
+        "usage": "Use for all section headers, modal titles, and hero text. Avoid generic Inter for headings."
+      },
+      "body": {
+        "family": "Inter, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "Use for all standard text, inputs, and data tables."
+      },
+      "mono": {
+        "family": "JetBrains Mono, monospace",
+        "usage": "Use for IDs, code snippets, or technical data points."
+      }
+    },
+    "rules": [
+      "Headings > 32px must use tracking-tight.",
+      "Overlines/Labels must be Uppercase + Tiny (text-xs) + Wide Spacing (tracking-widest).",
+      "Line height: leading-none for headers, leading-relaxed for body."
+    ]
+  },
+  "colors": {
+    "theme": "Deep Obsidian (Archetype 2 Hybrid)",
+    "palette": {
+      "background": "#0A0A0A",
+      "surface": "#121212",
+      "surface_highlight": "#1E1E1E",
+      "border": "rgba(255, 255, 255, 0.08)",
+      "primary": "#007AFF",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#FFFFFF",
+      "secondary_foreground": "#0A0A0A",
+      "accent": "#00FF94",
+      "muted": "#737373",
+      "destructive": "#FF3B30",
+      "text": {
+        "main": "#FFFFFF",
+        "muted": "#A1A1AA"
+      }
+    },
+    "gradients": {
+      "subtle_glow": "radial-gradient(circle at center, rgba(0, 122, 255, 0.15) 0%, transparent 70%)",
+      "tracing_beam": "linear-gradient(90deg, transparent, #007AFF, transparent)"
+    },
+    "rules": [
+      "Never use pure black (#000000) for backgrounds, use #0A0A0A.",
+      "Use 1px borders with low opacity (white/10) to define edges instead of heavy shadows.",
+      "Interactive elements must have a contrast ratio of at least 3:1."
+    ]
+  },
+  "layout": {
+    "grid_system": {
+      "dashboard": "Bento Grid (Mode B: High Density)",
+      "marketing": "Tetris Grid (Mode A: Asymmetry)",
+      "columns": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap": "gap-4 or gap-6"
+    },
+    "spacing": {
+      "scale": ["p-4", "p-6", "p-8", "p-12", "p-16", "p-24"],
+      "rule": "Use 2-3x more spacing than typical designs. Containers with borders must have internal padding (p-6 or p-8)."
+    },
+    "containers": {
+      "card": "rounded-xl border border-white/10 bg-surface/50 backdrop-blur-sm",
+      "sidebar": "border-r border-white/10 bg-background/95 backdrop-blur-md"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-white hover:bg-primary/90 shadow-[0_0_15px_rgba(0,122,255,0.3)] transition-all duration-300",
+      "secondary": "bg-white/10 text-white hover:bg-white/20 border border-white/10",
+      "ghost": "hover:bg-white/5 text-muted-foreground hover:text-white"
+    },
+    "inputs": {
+      "style": "bg-surface border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all rounded-lg h-10"
+    },
+    "cards": {
+      "style": "bg-[#121212] border border-white/5 rounded-xl hover:border-white/10 transition-colors"
+    },
+    "status_badges": {
+      "success": "bg-green-500/10 text-green-400 border border-green-500/20",
+      "warning": "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
+      "error": "bg-red-500/10 text-red-400 border border-red-500/20",
+      "neutral": "bg-white/5 text-gray-400 border border-white/10"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": {
+      "usage": "Sticky headers, floating navs, toasts",
+      "classes": "bg-black/60 backdrop-blur-xl border-b border-white/10"
+    },
+    "tracing_beam": {
+      "usage": "Active cards, pricing tables",
+      "implementation": "Use framer-motion to animate a glowing border."
+    },
+    "noise_texture": {
+      "usage": "Backgrounds to kill digital flatness",
+      "opacity": "opacity-[0.03]"
+    }
+  },
+  "media": {
+    "image_urls": {
+      "hero_team": "https://images.unsplash.com/photo-1758691736975-9f7f643d178e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxkaXZlcnNlJTIwcHJvZmVzc2lvbmFsJTIwdGVhbSUyMG9mZmljZXxlbnwwfHx8fDE3NjkxNTYzNjR8MA&ixlib=rb-4.1.0&q=85",
+      "office_interior": "https://images.unsplash.com/photo-1764255120215-9bb4665b44cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjb3Jwb3JhdGUlMjBvZmZpY2UlMjBpbnRlcmlvciUyMGRhcmt8ZW58MHx8fHwxNzY5MTU2MzY1fDA&ixlib=rb-4.1.0&q=85",
+      "meeting_room": "https://images.unsplash.com/photo-1733568414840-bcf218851fc3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjBjb3Jwb3JhdGUlMjBvZmZpY2UlMjBpbnRlcmlvciUyMGRhcmt8ZW58MHx8fHwxNzY5MTU2MzY1fDA&ixlib=rb-4.1.0&q=85",
+      "diverse_group": "https://images.unsplash.com/photo-1758873268663-5a362616b5a7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwyfHxkaXZlcnNlJTIwcHJvZmVzc2lvbmFsJTIwdGVhbSUyMG9mZmljZXxlbnwwfHx8fDE3NjkxNTYzNjR8MA&ixlib=rb-4.1.0&q=85"
+    },
+    "icons": "Use Lucide React (default) or Phosphor Icons for a more premium feel."
+  },
+  "universal_guidelines": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts. Use grids and asymmetry.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "Every interaction needs micro-animations (hover, focus, active).",
+    "Use 2-3x more spacing than feels comfortable.",
+    "All interactive elements MUST include data-testid attribute.",
+    "Do not use 'transparent' background for overlays/dropdowns; use solid or blurred backgrounds."
+  ],
+  "instructions_to_main_agent": "You are building a dark-mode HR Performance Management app. Follow the 'Deep Obsidian' theme. Use the provided image URLs for any placeholder images. Implement the 'Bento Grid' layout for the dashboard. Ensure all text has sufficient contrast against the dark background. Use 'Plus Jakarta Sans' for headings if possible, otherwise fallback to system sans but with tight tracking. Prioritize 'Shadcn' components but override their default styling to match the 'Deep Obsidian' aesthetic (remove roundness if needed, sharpen borders, add subtle glows)."
+}
