@@ -3,54 +3,193 @@
 ## Original Problem Statement
 Build a portable HR Performance Management web app for yearly EDI/performance conversations (~80 users now, scalable to ~200). Must be self-hostable with Docker + docker-compose on OVH.
 
+**Key Constraints:**
+- Password-based authentication (email verification removed)
+- NO numeric ratings - qualitative feedback only
+- Entra SSO scaffolded but disabled
+- Docker-based deployment for OVH
+
 ## User Personas
-1. **Admin** - HR administrator who imports users, manages cycles, has full system access
-2. **Manager** - Reviews direct reports, provides feedback and ratings
-3. **Employee** - Completes self-reviews, sets goals, views manager feedback
+1. **Admin** - HR administrator who imports users, manages cycles, manages passwords
+2. **Manager** - Reviews direct reports, provides qualitative feedback
+3. **Employee** - Completes self-reviews using structured form, views manager feedback
 
-## Core Requirements (Static)
-- Email-only authentication with verification codes (MVP)
-- Microsoft Entra SSO scaffolded for future enablement
-- Performance cycle management (Draft/Active/Archived)
-- Conversation workflow with status tracking
-- Rich text editing for reviews
-- PDF export of conversations
-- Role-based access control
-- Docker-compose deployment ready
+## Core Requirements (Implemented)
 
-## What's Been Implemented (2026-01-23)
-✅ Backend (FastAPI + MongoDB)
-- Auth abstraction layer with email mode
-- Entra SSO scaffolded (AUTH_MODE env toggle)
-- All CRUD endpoints for users, cycles, conversations
-- PDF generation with fpdf2
-- CSV/JSON user import
-- Role-based permissions
+### Authentication
+- Password-based login with email and password
+- Secure password generation on user import (14 chars, alphanumeric + special)
+- bcrypt password hashing (never stored in plaintext)
+- First-time login forces password change (`must_change_password` flag)
+- Session management with httpOnly cookies
+- Entra SSO scaffolded (disabled via `AUTH_MODE=password`)
 
-✅ Frontend (React + Tailwind + shadcn/ui)
-- Login page with email verification flow
-- Employee dashboard with Tiptap rich text editor
-- Manager dashboard with reports list and review detail
-- Admin page with users/cycles management
-- Dark theme (Deep Obsidian) design
-- Responsive layout
+### Performance Review Structure
 
-✅ Infrastructure
-- docker-compose.yml for deployment
-- .env templates for local and OVH
-- README with deployment instructions
-- Seed data script with demo users
+**Employee Input (3 Sections):**
+1. **Status Since Last Meeting**
+   - a) How have your previous goals progressed?
+   - General status update (optional)
 
-## Prioritized Backlog (P0/P1/P2)
+2. **New Goals and How to Achieve Them**
+   - a) What are your key goals for the next 1–3 months?
+   - b) How are you going to achieve them?
+   - c) What support or learning do you need?
 
-### P0 - Critical (Not Implemented)
-- None - MVP complete
+3. **Feedback and Wishes for the Future**
+   - Open text field
+
+**Manager Input:**
+- Single "Your Feedback" rich text field
+- NO numeric ratings
+
+### Admin Functions
+- User import via CSV or JSON
+- Password generation with one-time CSV export
+- Password reset with one-time CSV export
+- Cycle management (Draft/Active/Archived)
+
+### Historical/Archived Access
+- Employees: View all their archived reviews
+- Managers: View archived reviews for direct reports
+- Admins: Full access to all archived data
+- Only ONE active cycle allowed
+- Archived cycles are READ-ONLY at API level
+
+---
+
+## What's Been Implemented (2025-01-23)
+
+### Major Refactoring Completed
+✅ **Password-Based Authentication**
+- Replaced email verification code flow with password login
+- Implemented forced password change on first login
+- Admin CSV export for generated passwords
+- Admin password reset functionality
+
+✅ **Ratings Completely Removed**
+- No rating fields in data model
+- No rating UI components
+- No ratings in PDF exports
+- API explicitly returns `ratings: false`
+
+✅ **New Employee Input Structure**
+- 3 sections with specific questions
+- Rich text editors for all fields
+- Structured layout matching requirements
+
+✅ **Manager Single Feedback Field**
+- Removed ratings selectors
+- Single "Your Feedback" rich text field
+
+✅ **Historical/Archived Access**
+- History tab for employees
+- History tab for managers viewing reports
+- Read-only archived conversation views
+- PDF export for archived conversations
+
+### Infrastructure
+✅ Docker Compose setup for deployment
+✅ MongoDB with authentication
+✅ nginx reverse proxy configuration
+✅ Same-origin API calls for production
+
+### Documentation
+✅ README.md - Complete system documentation
+✅ agent_instructions.md - OVH deployment guide
+
+---
+
+## Technical Architecture
+
+```
+/app/
+├── backend/
+│   ├── server.py          # FastAPI application
+│   ├── seed_data.py       # Demo data seeder
+│   ├── requirements.txt
+│   ├── tests/
+│   │   └── test_hr_performance.py
+│   └── .env
+├── frontend/
+│   ├── src/
+│   │   ├── contexts/AuthContext.js
+│   │   ├── pages/
+│   │   │   ├── LoginPage.js
+│   │   │   ├── EmployeeDashboard.js
+│   │   │   ├── ManagerDashboard.js
+│   │   │   └── AdminPage.js
+│   │   └── components/
+│   ├── package.json
+│   └── .env
+├── deploy/
+│   ├── docker-compose.yml
+│   ├── .env.example
+│   └── .env.ovh.example
+├── README.md
+└── agent_instructions.md
+```
+
+### Key Data Models
+
+**User:**
+```json
+{
+  "email": "string (unique)",
+  "name": "string",
+  "department": "string",
+  "manager_email": "string (nullable)",
+  "roles": ["employee", "manager", "admin"],
+  "password_hash": "string (bcrypt)",
+  "must_change_password": "boolean",
+  "is_active": "boolean"
+}
+```
+
+**Conversation (New Structure):**
+```json
+{
+  "cycle_id": "string",
+  "employee_email": "string",
+  "manager_email": "string",
+  "status": "not_started|in_progress|ready_for_manager|completed",
+  
+  "previous_goals_progress": "string (rich text)",
+  "status_since_last_meeting": "string (rich text)",
+  "new_goals": "string (rich text)",
+  "how_to_achieve_goals": "string (rich text)",
+  "support_needed": "string (rich text)",
+  "feedback_and_wishes": "string (rich text)",
+  
+  "manager_feedback": "string (rich text)"
+}
+```
+
+---
+
+## Test Credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@company.com | Demo@123456 |
+| Manager | engineering.lead@company.com | Demo@123456 |
+| Employee | developer1@company.com | Demo@123456 |
+
+---
+
+## Prioritized Backlog
+
+### P0 - Critical (Completed)
+- ✅ Password-based authentication
+- ✅ Remove all ratings
+- ✅ New employee input structure
+- ✅ Manager single feedback field
+- ✅ Historical/archived access
 
 ### P1 - Important (Future)
-- Enable Entra SSO when ready
+- Enable Entra SSO when organization ready
 - Email notifications for status changes
 - Batch operations in admin panel
-- Direct reports hierarchy visualization
 
 ### P2 - Nice to Have
 - 360-degree feedback
@@ -59,97 +198,27 @@ Build a portable HR Performance Management web app for yearly EDI/performance co
 - Multi-language support
 - Audit log viewer
 
-## Next Tasks
-1. Deploy to OVH (follow README instructions)
-2. Import actual user data via CSV
-3. Create production performance cycle
-4. Test with real users
-5. Enable Entra SSO when organization ready
+---
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| AUTH_MODE | `password` or `entra` | password |
+| MONGO_ROOT_PASSWORD | MongoDB password | (required) |
+| CORS_ORIGINS | Allowed origins | (required) |
+| COOKIE_SECURE | HTTPS cookies | false (true for prod) |
+| SESSION_EXPIRY_HOURS | Session lifetime | 8 |
 
 ---
 
-## Security Hardening Update (2026-01-23)
+## Deployment Notes
 
-### Changes Made
-1. **MongoDB Security**
-   - Removed public port exposure (internal network only)
-   - Added authentication with MONGO_ROOT_USERNAME/PASSWORD
-   - Connection string updated with credentials
-
-2. **CORS Hardening**
-   - Removed wildcard CORS (*)
-   - CORS_ORIGINS must be explicitly set
-
-3. **Session Security**
-   - SHOW_CODE_IN_RESPONSE defaults to `false`
-   - COOKIE_SECURE defaults to `true`
-   - Session cookies are httpOnly, SameSite=lax
-   - Logout properly invalidates tokens
-
-4. **PDF Export Enhanced**
-   - Added cycle information section (name, dates, status)
-   - Added timestamps section (created_at, updated_at, updated_by)
-   - Added conversation ID for audit trail
-
-5. **Docker Compose Updated**
-   - Internal network for MongoDB
-   - Required environment variables with validation
-   - Proper health checks
-
-### Verified Sanity Checks
-- ✅ Authorization isolation (employee/manager/admin boundaries)
-- ✅ Session & cookie security (httpOnly, secure flags)
-- ✅ Cycle integrity (single active cycle)
-- ✅ PDF completeness (all fields included)
-- ✅ Data persistence (survives restarts)
-
-### Deployment Target
-- hr-staging.dstchemicals.com
+- See `README.md` for complete deployment instructions
+- See `agent_instructions.md` for OVH-specific manual tasks
+- MongoDB: Internal network only, no public exposure
+- Ports 8001/3000: Bound to localhost, nginx proxies
 
 ---
 
-## Deployment Hardening Update (2026-01-23)
-
-### Changes Made for OVH Deployment Risk Reduction
-
-**1. Docker Compose Hardening**
-- Backend port binds to `127.0.0.1:8001` only (not public)
-- Frontend port binds to `127.0.0.1:3000` only (not public)
-- nginx on host handles all external traffic
-
-**2. Same-Origin API Communication**
-- Frontend AuthContext now uses `getApiBaseUrl()` function
-- When `REACT_APP_BACKEND_URL` is empty, uses relative `/api` paths
-- No localhost URLs embedded in production builds
-
-**3. nginx Reverse Proxy Configuration**
-- HTTP→HTTPS redirect server block added
-- Proper proxy headers: `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`
-- PDF export timeouts: 120s read timeout
-- Location `/api/` with trailing slash correctly proxies to backend
-
-**4. Environment Variable Documentation**
-- Complete variable reference in README.md
-- Separation of committed templates vs actual .env files
-- .gitignore properly excludes .env but not .env.example templates
-
-**5. OVH Manual Tasks Documented**
-- Created `agent_instructions.md` with exact commands
-- DNS, TLS, firewall, nginx config all documented
-- Step-by-step checklist format
-
-### Files Created/Modified
-- `/app/deploy/docker-compose.yml` - localhost port binding
-- `/app/frontend/src/contexts/AuthContext.js` - same-origin API support
-- `/app/deploy/.env.example` - updated template with docs
-- `/app/deploy/.env.ovh.example` - staging template
-- `/app/.gitignore` - proper .env handling
-- `/app/README.md` - comprehensive deployment docs
-- `/app/agent_instructions.md` - OVH manual tasks
-
-### Verification
-- ✅ Health endpoint works via /api proxy
-- ✅ Login flow works
-- ✅ Dashboard accessible
-- ✅ PDF export works
-- ✅ SSO remains scaffold-only (AUTH_MODE=email)
+*Last Updated: 2025-01-23*
