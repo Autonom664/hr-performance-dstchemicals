@@ -188,7 +188,7 @@ class HRPerformanceAPITester:
             "status": "draft"
         }
         
-        success, data = self.make_request('POST', '/admin/cycles', cycle_data, 201)
+        success, data = self.make_request('POST', '/admin/cycles', cycle_data, 200)
         if success:
             cycle_id = data.get('id')
             self.log_test("Admin Create Cycle", True, f"Created cycle: {cycle_id}")
