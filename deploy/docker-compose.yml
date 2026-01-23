@@ -1,0 +1,80 @@
+# HR Performance Management - Docker Compose
+# For local development and OVH deployment
+
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: hr-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_DATABASE=${DB_NAME:-hr_performance}
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hr-backend
+    restart: unless-stopped
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=${DB_NAME:-hr_performance}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - AUTH_MODE=${AUTH_MODE:-email}
+      - DEV_VERIFICATION_CODE=${DEV_VERIFICATION_CODE:-}
+      - SHOW_CODE_IN_RESPONSE=${SHOW_CODE_IN_RESPONSE:-true}
+      - SESSION_EXPIRY_HOURS=${SESSION_EXPIRY_HOURS:-24}
+      - ENTRA_TENANT_ID=${ENTRA_TENANT_ID:-}
+      - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID:-}
+      - ENTRA_CLIENT_SECRET=${ENTRA_CLIENT_SECRET:-}
+      - ENTRA_REDIRECT_URI=${ENTRA_REDIRECT_URI:-}
+      - ENTRA_SCOPES=${ENTRA_SCOPES:-openid profile email}
+    ports:
+      - "8001:8001"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - hr-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-http://localhost:8001}
+    container_name: hr-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - hr-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  hr-network:
+    driver: bridge
