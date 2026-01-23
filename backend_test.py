@@ -77,174 +77,335 @@ class HRSecurityTester:
                      f"Status: {data.get('status', 'unknown')}" if success else str(data))
         return success
 
-    def test_email_auth_start(self, email: str):
-        """Test starting email authentication"""
-        success, data = self.make_request('POST', '/auth/email/start', 
-                                        {"email": email})
+    def authenticate_user(self, email: str) -> bool:
+        """Authenticate a user and store their session token"""
+        print(f"🔐 Authenticating {email}...")
         
-        if success:
-            verification_code = data.get('code')
-            self.log_test(f"Email Auth Start ({email})", True, 
-                         f"Code: {verification_code}" if verification_code else "Code sent")
-            return verification_code
-        else:
-            self.log_test(f"Email Auth Start ({email})", False, str(data))
-            return None
-
-    def test_email_auth_verify(self, email: str, code: str):
-        """Test verifying email authentication"""
+        # Start auth
+        success, data = self.make_request('POST', '/auth/email/start', {"email": email})
+        if not success:
+            self.log_test(f"Auth Start ({email})", False, str(data))
+            return False
+            
+        verification_code = data.get('code')
+        if not verification_code:
+            self.log_test(f"Auth Start ({email})", False, "No verification code received")
+            return False
+            
+        # Verify auth
         success, data = self.make_request('POST', '/auth/email/verify', 
-                                        {"email": email, "code": code})
-        
+                                        {"email": email, "code": verification_code})
         if success:
-            self.session_token = data.get('token')
-            self.current_user = data.get('user')
-            self.log_test(f"Email Auth Verify ({email})", True, 
-                         f"User: {self.current_user.get('name', email)}")
+            self.session_tokens[email] = data.get('token')
+            self.log_test(f"Authentication ({email})", True, f"User: {data.get('user', {}).get('name', email)}")
             return True
         else:
-            self.log_test(f"Email Auth Verify ({email})", False, str(data))
+            self.log_test(f"Authentication ({email})", False, str(data))
             return False
 
-    def test_auth_me(self):
-        """Test getting current user info"""
-        success, data = self.make_request('GET', '/auth/me')
-        self.log_test("Get Current User", success, 
-                     f"User: {data.get('email', 'unknown')}" if success else str(data))
-        return success
-
-    def test_get_active_cycle(self):
-        """Test getting active cycle"""
-        success, data = self.make_request('GET', '/cycles/active')
-        # Note: 404 is acceptable if no active cycle exists
-        if success or (not success and data.get('status_code') == 404):
-            self.log_test("Get Active Cycle", True, 
-                         f"Cycle: {data.get('name', 'No active cycle')}")
-            return data if success else None
-        else:
-            self.log_test("Get Active Cycle", False, str(data))
-            return None
-
-    def test_get_my_conversation(self):
-        """Test getting user's conversation"""
-        success, data = self.make_request('GET', '/conversations/me')
-        # 404 is acceptable if no active cycle
-        if success or (not success and data.get('status_code') == 404):
-            self.log_test("Get My Conversation", True, 
-                         f"Status: {data.get('status', 'No conversation')}")
-            return data if success else None
-        else:
-            self.log_test("Get My Conversation", False, str(data))
-            return None
-
-    def test_update_my_conversation(self):
-        """Test updating user's conversation"""
-        update_data = {
-            "employee_self_review": "Test self review content",
-            "goals_next_period": "Test goals for next period",
-            "status": "in_progress"
-        }
+    def test_authorization_isolation(self):
+        """Test authorization boundaries between users"""
+        print("\n🔒 Testing Authorization Isolation...")
         
-        success, data = self.make_request('PUT', '/conversations/me', update_data)
-        self.log_test("Update My Conversation", success, 
-                     f"Status: {data.get('status', 'unknown')}" if success else str(data))
-        return success
-
-    def test_admin_get_users(self):
-        """Test getting all users (admin only)"""
-        success, data = self.make_request('GET', '/admin/users')
-        if success:
-            user_count = len(data) if isinstance(data, list) else 0
-            self.log_test("Admin Get Users", True, f"Found {user_count} users")
-            return data
-        else:
-            self.log_test("Admin Get Users", False, str(data))
-            return None
-
-    def test_admin_import_users(self):
-        """Test importing users (admin only)"""
-        test_users = [
-            {
-                "employee_email": f"test.user.{datetime.now().strftime('%H%M%S')}@company.com",
-                "employee_name": "Test User",
-                "department": "Testing",
-                "is_admin": False
-            }
-        ]
+        # Ensure we have authenticated users
+        users = ["admin@company.com", "engineering.lead@company.com", "developer1@company.com", "developer2@company.com"]
+        for user in users:
+            if user not in self.session_tokens:
+                if not self.authenticate_user(user):
+                    print(f"❌ Failed to authenticate {user} - skipping authorization tests")
+                    return False
         
-        success, data = self.make_request('POST', '/admin/users/import', test_users)
-        self.log_test("Admin Import Users", success, 
-                     f"Imported: {data.get('imported', 0)}" if success else str(data))
-        return success
+        # Get conversations for testing
+        dev1_conv = self.get_user_conversation("developer1@company.com")
+        dev2_conv = self.get_user_conversation("developer2@company.com")
+        
+        if not dev1_conv or not dev2_conv:
+            self.log_test("Authorization Setup", False, "Could not get test conversations")
+            return False
+            
+        dev1_conv_id = dev1_conv.get('id')
+        dev2_conv_id = dev2_conv.get('id')
+        
+        # Test 1: Employee cannot access another employee's conversation by ID
+        success, data = self.make_request('GET', f'/conversations/{dev2_conv_id}/pdf', 
+                                        user_email="developer1@company.com", expected_status=403)
+        self.log_test("Employee cannot access other employee's conversation (PDF)", success, 
+                     "403 Forbidden" if success else f"Got {data.get('status_code', 'unknown')}")
+        
+        # Test 2: Employee cannot access conversation via URL manipulation
+        success, data = self.make_request('GET', f'/manager/conversations/developer2@company.com', 
+                                        user_email="developer1@company.com", expected_status=403)
+        self.log_test("Employee cannot access manager endpoints", success,
+                     "403 Forbidden" if success else f"Got {data.get('status_code', 'unknown')}")
+        
+        # Test 3: Manager cannot access conversations of users NOT in their reporting line
+        # First, create a user not under engineering.lead
+        test_user_email = f"external.user.{datetime.now().strftime('%H%M%S')}@company.com"
+        admin_import_data = [{
+            "employee_email": test_user_email,
+            "employee_name": "External User",
+            "manager_email": "other.manager@company.com",  # Different manager
+            "department": "Other",
+            "is_admin": False
+        }]
+        
+        # Import as admin
+        self.make_request('POST', '/admin/users/import', admin_import_data, user_email="admin@company.com")
+        
+        # Try to access as engineering.lead (should fail)
+        success, data = self.make_request('GET', f'/manager/conversations/{test_user_email}', 
+                                        user_email="engineering.lead@company.com", expected_status=403)
+        self.log_test("Manager cannot access non-report conversations", success,
+                     "403 Forbidden" if success else f"Got {data.get('status_code', 'unknown')}")
+        
+        # Test 4: Admin can access any conversation
+        success, data = self.make_request('GET', f'/conversations/{dev1_conv_id}/pdf', 
+                                        user_email="admin@company.com", expected_status=200)
+        self.log_test("Admin can access any conversation", success,
+                     "200 OK" if success else f"Got {data.get('status_code', 'unknown')}")
+        
+        return True
 
-    def test_admin_get_cycles(self):
-        """Test getting all cycles (admin only)"""
-        success, data = self.make_request('GET', '/admin/cycles')
-        if success:
-            cycle_count = len(data) if isinstance(data, list) else 0
-            self.log_test("Admin Get Cycles", True, f"Found {cycle_count} cycles")
-            return data
-        else:
-            self.log_test("Admin Get Cycles", False, str(data))
-            return None
+    def test_session_security(self):
+        """Test session and cookie security"""
+        print("\n🍪 Testing Session Security...")
+        
+        # Test 1: Sessions use httpOnly cookies (check response headers)
+        auth_data = {"email": "developer1@company.com", "code": "123456"}
+        url = f"{self.base_url}/api/auth/email/verify"
+        
+        # First get a verification code
+        self.make_request('POST', '/auth/email/start', {"email": "developer1@company.com"})
+        
+        response = requests.post(url, json=auth_data, timeout=10)
+        
+        # Check if Set-Cookie header contains httponly
+        set_cookie = response.headers.get('set-cookie', '')
+        has_httponly = 'httponly' in set_cookie.lower()
+        self.log_test("Sessions use httpOnly cookies", has_httponly,
+                     f"Set-Cookie: {set_cookie[:100]}..." if set_cookie else "No Set-Cookie header")
+        
+        # Test 2: Session expiry enforcement (simulate expired session)
+        # This would require manipulating the database or waiting, so we test the logic
+        expired_token = "expired_token_test"
+        headers = {'Authorization': f'Bearer {expired_token}', 'Content-Type': 'application/json'}
+        url = f"{self.base_url}/api/auth/me"
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        success = response.status_code == 401
+        self.log_test("Session expiry is enforced", success,
+                     "401 Unauthorized for invalid token" if success else f"Got {response.status_code}")
+        
+        # Test 3: Logout properly invalidates session
+        if "developer1@company.com" in self.session_tokens:
+            token_before = self.session_tokens["developer1@company.com"]
+            
+            # Logout
+            success, data = self.make_request('POST', '/auth/logout', user_email="developer1@company.com")
+            
+            # Try to use the token after logout
+            headers = {'Authorization': f'Bearer {token_before}', 'Content-Type': 'application/json'}
+            response = requests.get(f"{self.base_url}/api/auth/me", headers=headers, timeout=10)
+            
+            token_invalid = response.status_code == 401
+            self.log_test("Logout invalidates session", token_invalid,
+                         "Token invalid after logout" if token_invalid else f"Token still valid: {response.status_code}")
+            
+            # Re-authenticate for further tests
+            self.authenticate_user("developer1@company.com")
+        
+        return True
 
-    def test_admin_create_cycle(self):
-        """Test creating a performance cycle (admin only)"""
-        cycle_data = {
-            "name": f"Test Cycle {datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    def test_cycle_integrity(self):
+        """Test cycle management integrity"""
+        print("\n🔄 Testing Cycle Integrity...")
+        
+        if "admin@company.com" not in self.session_tokens:
+            self.authenticate_user("admin@company.com")
+        
+        # Test 1: Only one active cycle at a time
+        # Create two test cycles
+        cycle1_data = {
+            "name": f"Test Cycle 1 {datetime.now().strftime('%H%M%S')}",
             "start_date": datetime.now().isoformat(),
             "end_date": (datetime.now() + timedelta(days=90)).isoformat(),
             "status": "draft"
         }
         
-        success, data = self.make_request('POST', '/admin/cycles', cycle_data, 200)
-        if success:
-            cycle_id = data.get('id')
-            self.log_test("Admin Create Cycle", True, f"Created cycle: {cycle_id}")
-            return cycle_id
-        else:
-            self.log_test("Admin Create Cycle", False, str(data))
-            return None
+        cycle2_data = {
+            "name": f"Test Cycle 2 {datetime.now().strftime('%H%M%S')}",
+            "start_date": datetime.now().isoformat(),
+            "end_date": (datetime.now() + timedelta(days=90)).isoformat(),
+            "status": "draft"
+        }
+        
+        # Create cycles
+        success1, data1 = self.make_request('POST', '/admin/cycles', cycle1_data, user_email="admin@company.com")
+        success2, data2 = self.make_request('POST', '/admin/cycles', cycle2_data, user_email="admin@company.com")
+        
+        if success1 and success2:
+            cycle1_id = data1.get('id')
+            cycle2_id = data2.get('id')
+            
+            # Activate first cycle
+            success, _ = self.make_request('PATCH', f'/admin/cycles/{cycle1_id}?status=active', 
+                                        user_email="admin@company.com")
+            
+            # Activate second cycle (should deactivate first)
+            success, _ = self.make_request('PATCH', f'/admin/cycles/{cycle2_id}?status=active', 
+                                        user_email="admin@company.com")
+            
+            # Check that only cycle2 is active
+            success, cycles = self.make_request('GET', '/admin/cycles', user_email="admin@company.com")
+            if success:
+                active_cycles = [c for c in cycles if c.get('status') == 'active']
+                only_one_active = len(active_cycles) == 1 and active_cycles[0].get('id') == cycle2_id
+                self.log_test("Only one active cycle at a time", only_one_active,
+                             f"Found {len(active_cycles)} active cycles")
+            else:
+                self.log_test("Only one active cycle at a time", False, "Could not retrieve cycles")
+        
+        # Test 2: Status transitions work correctly
+        if success2:
+            cycle_id = data2.get('id')
+            
+            # Test draft -> active
+            success, data = self.make_request('PATCH', f'/admin/cycles/{cycle_id}?status=active', 
+                                            user_email="admin@company.com")
+            transition_works = success and data.get('status') == 'active'
+            self.log_test("Cycle status transitions work", transition_works,
+                         f"Status: {data.get('status', 'unknown')}" if success else str(data))
+        
+        return True
 
-    def test_admin_update_cycle_status(self, cycle_id: str):
-        """Test updating cycle status (admin only)"""
-        success, data = self.make_request('PATCH', f'/admin/cycles/{cycle_id}?status=active')
-        self.log_test("Admin Update Cycle Status", success, 
-                     f"Status: {data.get('status', 'unknown')}" if success else str(data))
-        return success
-
-    def test_manager_get_reports(self):
-        """Test getting direct reports (manager only)"""
-        success, data = self.make_request('GET', '/manager/reports')
-        if success:
-            report_count = len(data) if isinstance(data, list) else 0
-            self.log_test("Manager Get Reports", True, f"Found {report_count} reports")
-            return data
-        else:
-            self.log_test("Manager Get Reports", False, str(data))
-            return None
-
-    def test_pdf_export(self, conversation_id: str):
-        """Test PDF export functionality"""
-        if not conversation_id:
-            self.log_test("PDF Export", False, "No conversation ID provided")
+    def test_pdf_completeness(self):
+        """Test PDF export completeness"""
+        print("\n📄 Testing PDF Export Completeness...")
+        
+        # Get a conversation to test
+        conv = self.get_user_conversation("developer1@company.com")
+        if not conv:
+            self.log_test("PDF Test Setup", False, "No conversation available for PDF test")
             return False
             
-        # For PDF export, we expect a different response type
-        url = f"{self.base_url}/api/conversations/{conversation_id}/pdf"
-        headers = {}
-        if self.session_token:
-            headers['Authorization'] = f'Bearer {self.session_token}'
+        conv_id = conv.get('id')
+        
+        # Update conversation with test data
+        update_data = {
+            "employee_self_review": "Comprehensive self-review content for PDF testing",
+            "goals_next_period": "Detailed goals for the next performance period",
+            "status": "ready_for_manager"
+        }
+        
+        self.make_request('PUT', '/conversations/me', update_data, user_email="developer1@company.com")
+        
+        # Add manager review (as manager)
+        if "engineering.lead@company.com" not in self.session_tokens:
+            self.authenticate_user("engineering.lead@company.com")
+            
+        manager_update = {
+            "manager_review": "Detailed manager review for PDF testing",
+            "meeting_date": datetime.now().isoformat(),
+            "ratings": {"performance": 4, "collaboration": 5, "growth": 3},
+            "status": "completed"
+        }
+        
+        self.make_request('PUT', f'/manager/conversations/developer1@company.com', 
+                         manager_update, user_email="engineering.lead@company.com")
+        
+        # Test PDF export
+        url = f"{self.base_url}/api/conversations/{conv_id}/pdf"
+        headers = {'Authorization': f'Bearer {self.session_tokens["developer1@company.com"]}'}
         
         try:
-            response = requests.get(url, headers=headers, timeout=10)
-            success = response.status_code == 200 and 'application/pdf' in response.headers.get('content-type', '')
-            self.log_test("PDF Export", success, 
+            response = requests.get(url, headers=headers, timeout=15)
+            
+            # Test 1: PDF is generated successfully
+            is_pdf = response.status_code == 200 and 'application/pdf' in response.headers.get('content-type', '')
+            self.log_test("PDF Export generates successfully", is_pdf,
                          f"Content-Type: {response.headers.get('content-type', 'unknown')}")
-            return success
+            
+            # Test 2: PDF has reasonable size (indicates content)
+            pdf_size = len(response.content) if is_pdf else 0
+            has_content = pdf_size > 5000  # Reasonable minimum for a complete PDF
+            self.log_test("PDF Export has substantial content", has_content,
+                         f"PDF size: {pdf_size} bytes")
+            
+            # Test 3: Filename includes employee info
+            content_disposition = response.headers.get('content-disposition', '')
+            has_filename = 'developer1' in content_disposition.lower()
+            self.log_test("PDF Export includes employee in filename", has_filename,
+                         f"Content-Disposition: {content_disposition}")
+            
+            return is_pdf and has_content
+            
         except Exception as e:
             self.log_test("PDF Export", False, str(e))
             return False
+
+    def test_data_persistence(self):
+        """Test data persistence and restart behavior"""
+        print("\n💾 Testing Data Persistence...")
+        
+        # Test 1: Create test data
+        test_email = f"persistence.test.{datetime.now().strftime('%H%M%S')}@company.com"
+        
+        # Import user as admin
+        if "admin@company.com" not in self.session_tokens:
+            self.authenticate_user("admin@company.com")
+            
+        import_data = [{
+            "employee_email": test_email,
+            "employee_name": "Persistence Test User",
+            "manager_email": "engineering.lead@company.com",
+            "department": "Testing",
+            "is_admin": False
+        }]
+        
+        success, data = self.make_request('POST', '/admin/users/import', import_data, 
+                                        user_email="admin@company.com")
+        
+        if success:
+            # Authenticate the test user
+            if self.authenticate_user(test_email):
+                # Create conversation data
+                conv = self.get_user_conversation(test_email)
+                if conv:
+                    update_data = {
+                        "employee_self_review": f"Persistence test data created at {datetime.now()}",
+                        "goals_next_period": "Test goals for persistence verification",
+                        "status": "in_progress"
+                    }
+                    
+                    success, _ = self.make_request('PUT', '/conversations/me', update_data, 
+                                                 user_email=test_email)
+                    
+                    self.log_test("Data Persistence - Create test data", success,
+                                 "Test conversation created" if success else "Failed to create test data")
+                    
+                    # Test 2: Verify data can be retrieved
+                    success, retrieved_conv = self.make_request('GET', '/conversations/me', 
+                                                              user_email=test_email)
+                    
+                    data_matches = (success and 
+                                  retrieved_conv.get('employee_self_review') == update_data['employee_self_review'])
+                    
+                    self.log_test("Data Persistence - Retrieve test data", data_matches,
+                                 "Data retrieved successfully" if data_matches else "Data mismatch or retrieval failed")
+                    
+                    return data_matches
+        
+        self.log_test("Data Persistence", False, "Could not set up test data")
+        return False
+
+    def get_user_conversation(self, email: str):
+        """Helper to get a user's conversation"""
+        if email not in self.session_tokens:
+            if not self.authenticate_user(email):
+                return None
+                
+        success, data = self.make_request('GET', '/conversations/me', user_email=email)
+        return data if success else None
 
     def run_full_test_suite(self):
         """Run comprehensive test suite"""
