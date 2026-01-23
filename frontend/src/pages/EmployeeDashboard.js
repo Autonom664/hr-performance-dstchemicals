@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import RichTextEditor from '../components/RichTextEditor';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Loader2, FileText, Calendar, Target, Save, Send, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 
 const STATUS_LABELS = {
   not_started: 'Not Started',
@@ -81,14 +80,6 @@ const EmployeeDashboard = () => {
     } catch (error) {
       toast.error('Failed to export PDF');
     }
-  };
-
-  const quillModules = {
-    toolbar: [
-      ['bold', 'italic', 'underline'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['clean']
-    ],
   };
 
   if (loading) {
@@ -202,13 +193,11 @@ const EmployeeDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ReactQuill
-              theme="snow"
+            <RichTextEditor
               value={selfReview}
               onChange={setSelfReview}
-              modules={quillModules}
               placeholder="Describe your key accomplishments, challenges you overcame, and how you've grown..."
-              readOnly={isCompleted}
+              disabled={isCompleted}
               data-testid="self-review-editor"
             />
           </CardContent>
@@ -226,13 +215,11 @@ const EmployeeDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ReactQuill
-              theme="snow"
+            <RichTextEditor
               value={goals}
               onChange={setGoals}
-              modules={quillModules}
               placeholder="Define your goals, objectives, and development areas for the upcoming period..."
-              readOnly={isCompleted}
+              disabled={isCompleted}
               data-testid="goals-editor"
             />
           </CardContent>
