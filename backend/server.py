@@ -311,13 +311,13 @@ async def auth_email_verify(request: EmailVerifyRequest, response: Response):
     # Delete used code
     await db.verification_codes.delete_many({"email": email})
     
-    # Set cookie
+    # Set cookie with security settings from environment
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=SESSION_EXPIRY_HOURS * 3600
     )
     
