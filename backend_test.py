@@ -32,13 +32,20 @@ class HRSecurityTester:
             "details": details
         })
 
-    def make_request(self, method: str, endpoint: str, data: Dict = None, expected_status: int = 200) -> tuple[bool, Dict]:
+    def make_request(self, method: str, endpoint: str, data: Dict = None, expected_status: int = 200, user_email: str = None) -> tuple[bool, Dict]:
         """Make API request with proper headers"""
         url = f"{self.base_url}/api/{endpoint.lstrip('/')}"
         headers = {'Content-Type': 'application/json'}
         
-        if self.session_token:
-            headers['Authorization'] = f'Bearer {self.session_token}'
+        # Use specific user's session token if provided
+        session_token = None
+        if user_email and user_email in self.session_tokens:
+            session_token = self.session_tokens[user_email]
+        elif hasattr(self, 'session_token') and self.session_token:
+            session_token = self.session_token
+            
+        if session_token:
+            headers['Authorization'] = f'Bearer {session_token}'
 
         try:
             if method == 'GET':
