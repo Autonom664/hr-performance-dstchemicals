@@ -1,10 +1,13 @@
 # HR Performance Management - Docker Compose
 # For local development and OVH staging/production deployment
+#
+# IMPORTANT: In staging/production, only ports 80 and 443 should be publicly accessible.
+# Backend and frontend containers bind to localhost only - nginx reverse proxy handles external traffic.
 
 version: '3.8'
 
 services:
-  # MongoDB Database - Internal only, not exposed publicly
+  # MongoDB Database - Internal only, never exposed publicly
   mongodb:
     image: mongo:7.0
     container_name: hr-mongodb
@@ -24,7 +27,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # FastAPI Backend
+  # FastAPI Backend - localhost only, nginx proxies to it
   backend:
     build:
       context: ./backend
@@ -51,8 +54,9 @@ services:
       - ENTRA_CLIENT_SECRET=${ENTRA_CLIENT_SECRET:-}
       - ENTRA_REDIRECT_URI=${ENTRA_REDIRECT_URI:-}
       - ENTRA_SCOPES=${ENTRA_SCOPES:-openid profile email}
+    # LOCALHOST ONLY - nginx proxies external traffic
     ports:
-      - "${BACKEND_PORT:-8001}:8001"
+      - "127.0.0.1:${BACKEND_PORT:-8001}:8001"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -65,17 +69,20 @@ services:
       timeout: 10s
       retries: 3
 
-  # React Frontend (Nginx)
+  # React Frontend (Nginx) - localhost only, nginx proxies to it
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:?REACT_APP_BACKEND_URL is required}
+        # For same-origin deployment, use empty string (frontend will use relative /api paths)
+        # For cross-origin deployment, use full URL like https://api.example.com
+        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-}
     container_name: hr-frontend
     restart: unless-stopped
+    # LOCALHOST ONLY - nginx proxies external traffic
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
     networks:
