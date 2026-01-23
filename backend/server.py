@@ -16,7 +16,9 @@ import json
 import csv
 import io
 from enum import Enum
-from weasyprint import HTML, CSS
+from fpdf import FPDF
+import html
+import re
 import aiofiles
 
 ROOT_DIR = Path(__file__).parent
