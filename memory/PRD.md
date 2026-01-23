@@ -65,3 +65,43 @@ Build a portable HR Performance Management web app for yearly EDI/performance co
 3. Create production performance cycle
 4. Test with real users
 5. Enable Entra SSO when organization ready
+
+---
+
+## Security Hardening Update (2026-01-23)
+
+### Changes Made
+1. **MongoDB Security**
+   - Removed public port exposure (internal network only)
+   - Added authentication with MONGO_ROOT_USERNAME/PASSWORD
+   - Connection string updated with credentials
+
+2. **CORS Hardening**
+   - Removed wildcard CORS (*)
+   - CORS_ORIGINS must be explicitly set
+
+3. **Session Security**
+   - SHOW_CODE_IN_RESPONSE defaults to `false`
+   - COOKIE_SECURE defaults to `true`
+   - Session cookies are httpOnly, SameSite=lax
+   - Logout properly invalidates tokens
+
+4. **PDF Export Enhanced**
+   - Added cycle information section (name, dates, status)
+   - Added timestamps section (created_at, updated_at, updated_by)
+   - Added conversation ID for audit trail
+
+5. **Docker Compose Updated**
+   - Internal network for MongoDB
+   - Required environment variables with validation
+   - Proper health checks
+
+### Verified Sanity Checks
+- ✅ Authorization isolation (employee/manager/admin boundaries)
+- ✅ Session & cookie security (httpOnly, secure flags)
+- ✅ Cycle integrity (single active cycle)
+- ✅ PDF completeness (all fields included)
+- ✅ Data persistence (survives restarts)
+
+### Deployment Target
+- hr-staging.dstchemicals.com
