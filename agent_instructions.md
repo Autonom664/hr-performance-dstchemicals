@@ -92,9 +92,6 @@ cd /opt/hr-performance
 # Clone the private repo (requires GitHub access)
 git clone https://github.com/Autonom664/HR.git .
 
-# Or if using deploy key:
-git clone git@github.com:Autonom664/HR.git .
-
 # Navigate to deploy directory
 cd deploy
 
@@ -113,8 +110,8 @@ MONGO_ROOT_PASSWORD=<generate-with: openssl rand -base64 32>
 # These should already be correct in template:
 REACT_APP_BACKEND_URL=
 CORS_ORIGINS=https://hr-staging.dstchemicals.com
-SHOW_CODE_IN_RESPONSE=false
 COOKIE_SECURE=true
+AUTH_MODE=password
 ```
 
 ---
@@ -138,10 +135,7 @@ sudo systemctl start nginx
 
 **Set up auto-renewal:**
 ```bash
-# Test renewal
 sudo certbot renew --dry-run
-
-# Certbot automatically creates a cron job for renewal
 ```
 
 ---
@@ -162,8 +156,6 @@ server {
     listen 80;
     listen [::]:80;
     server_name hr-staging.dstchemicals.com;
-    
-    # Redirect all HTTP to HTTPS
     return 301 https://$server_name$request_uri;
 }
 
@@ -173,73 +165,51 @@ server {
     listen [::]:443 ssl http2;
     server_name hr-staging.dstchemicals.com;
 
-    # TLS certificates (Let's Encrypt)
     ssl_certificate /etc/letsencrypt/live/hr-staging.dstchemicals.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/hr-staging.dstchemicals.com/privkey.pem;
     
-    # Modern TLS configuration
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 1d;
 
-    # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # Backend API - proxy to localhost:8001
-    # IMPORTANT: Preserve /api prefix in proxy_pass
     location /api/ {
         proxy_pass http://127.0.0.1:8001/api/;
         proxy_http_version 1.1;
-        
-        # Required proxy headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
-        
-        # WebSocket support (if needed)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
-        # Timeouts for PDF export (can take longer)
         proxy_connect_timeout 60s;
         proxy_send_timeout 120s;
         proxy_read_timeout 120s;
-        
-        # Buffering for large responses
         proxy_buffering on;
         proxy_buffer_size 4k;
         proxy_buffers 8 32k;
         proxy_busy_buffers_size 64k;
     }
 
-    # Frontend - proxy to localhost:3000
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        
-        # Required proxy headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
-        
-        # WebSocket support for hot reload (dev) / React Router
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
-        # Cache control for static assets
         proxy_cache_bypass $http_upgrade;
     }
 
-    # Logging
     access_log /var/log/nginx/hr-staging.access.log;
     error_log /var/log/nginx/hr-staging.error.log;
 }
@@ -247,16 +217,9 @@ server {
 
 **Enable the site:**
 ```bash
-# Create symlink to enable site
 sudo ln -s /etc/nginx/sites-available/hr-staging /etc/nginx/sites-enabled/
-
-# Remove default site (optional)
 sudo rm -f /etc/nginx/sites-enabled/default
-
-# Test configuration
 sudo nginx -t
-
-# Reload nginx
 sudo systemctl reload nginx
 ```
 
@@ -285,65 +248,60 @@ docker exec hr-backend python seed_data.py
 ### 8. Verification
 
 ```bash
-# Test health endpoint via nginx proxy
+# Test health endpoint
 curl -s https://hr-staging.dstchemicals.com/api/health
+# Expected: {"status":"healthy","auth_mode":"password","version":"2.0.0"}
 
-# Expected: {"status":"healthy","auth_mode":"email"}
-
-# Test HTTP redirect
-curl -I http://hr-staging.dstchemicals.com
-# Expected: 301 redirect to https://
-
-# Check container logs for errors
-docker compose logs backend --tail 50
+# Test login with demo account
+curl -s -X POST https://hr-staging.dstchemicals.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@company.com","password":"Demo@123456"}'
+# Expected: JSON with user info and token
 ```
 
 ---
 
-## Quick Reference: Environment Variables
+## Post-Deployment: User Onboarding
 
-| Variable | Where to Set | OVH Staging Value |
-|----------|--------------|-------------------|
-| `MONGO_ROOT_PASSWORD` | `/opt/hr-performance/deploy/.env` | Strong random password |
-| `REACT_APP_BACKEND_URL` | `/opt/hr-performance/deploy/.env` | (empty - uses /api) |
-| `CORS_ORIGINS` | `/opt/hr-performance/deploy/.env` | `https://hr-staging.dstchemicals.com` |
-| `SHOW_CODE_IN_RESPONSE` | `/opt/hr-performance/deploy/.env` | `false` |
-| `COOKIE_SECURE` | `/opt/hr-performance/deploy/.env` | `true` |
+### First-Time Setup
+
+1. **Login as Admin:** Use `admin@company.com` / `Demo@123456`
+2. **Change Admin Password:** The admin account has `must_change_password=false` for demo, but you should change it manually
+3. **Import Real Users:**
+   - Prepare CSV: `employee_email,employee_name,manager_email,department,is_admin`
+   - Go to Admin → Import Users
+   - Download the one-time credentials CSV
+4. **Distribute Passwords:** Send passwords securely to users
+5. **Create Production Cycle:** Admin → Cycles → New Cycle → Activate
+
+### Security Recommendations
+
+- Change all demo passwords after initial setup
+- Use strong MONGO_ROOT_PASSWORD (32+ chars)
+- Keep credentials CSV secure and delete after distribution
+- Monitor `/var/log/nginx/hr-staging.error.log` for issues
 
 ---
 
 ## Troubleshooting
 
-### Check if ports are bound correctly
+### Check Ports
 ```bash
-# Backend should be on 127.0.0.1:8001 only
-sudo ss -tlnp | grep 8001
-# Expected: 127.0.0.1:8001
-
-# Frontend should be on 127.0.0.1:3000 only  
-sudo ss -tlnp | grep 3000
-# Expected: 127.0.0.1:3000
+sudo ss -tlnp | grep -E '8001|3000'
+# Should show 127.0.0.1 binding only
 ```
 
-### Check nginx logs
-```bash
-sudo tail -f /var/log/nginx/hr-staging.error.log
-```
-
-### Check container logs
+### Check Logs
 ```bash
 docker compose logs backend --tail 100
 docker compose logs frontend --tail 100
+sudo tail -f /var/log/nginx/hr-staging.error.log
 ```
 
-### Restart services
+### Restart Services
 ```bash
-# Restart nginx
 sudo systemctl restart nginx
-
-# Restart docker containers
-cd /opt/hr-performance/deploy
-docker compose restart
+cd /opt/hr-performance/deploy && docker compose restart
 ```
 
 ---
@@ -352,34 +310,9 @@ docker compose restart
 
 ```bash
 cd /opt/hr-performance
-
-# Pull latest changes
 git pull origin main
-
-# Rebuild and restart
 cd deploy
 docker compose down
 docker compose up -d --build
-
-# Check logs
 docker compose logs -f
-```
-
----
-
-## Rollback Procedure
-
-```bash
-cd /opt/hr-performance
-
-# View recent commits
-git log --oneline -10
-
-# Rollback to specific commit
-git checkout <commit-hash>
-
-# Rebuild
-cd deploy
-docker compose down
-docker compose up -d --build
 ```
