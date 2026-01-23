@@ -1,10 +1,37 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# HR Performance Management - Git Ignore
+# See https://help.github.com/articles/ignoring-files/
 
-# IDE and editors
+# =============================================================================
+# ENVIRONMENT FILES - CRITICAL SECURITY
+# =============================================================================
+# Ignore all .env files EXCEPT the committed templates
+.env
+.env.local
+.env.production
+.env.staging
+deploy/.env
+
+# DO NOT ignore these templates (they are safe to commit):
+# - deploy/.env.example
+# - deploy/.env.ovh.example
+
+# Credentials and tokens
+*token.json*
+*credentials.json*
+*.pem
+
+# =============================================================================
+# IDE AND EDITORS
+# =============================================================================
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
-# Dependencies
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
 node_modules/
 /node_modules
 /.pnp
@@ -16,83 +43,70 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
-# Testing
+# =============================================================================
+# BUILD OUTPUTS
+# =============================================================================
+/build
+dist/
 /coverage
-
-# Next.js
 /.next/
 /out/
 next-env.d.ts
 *.tsbuildinfo
 
-# Production builds
-/build
-dist/
-dist
+# =============================================================================
+# PYTHON
+# =============================================================================
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
 
-# Environment files (comprehensive coverage)
-
-*token.json*
-*credentials.json*
-
-# Logs and debug files
+# =============================================================================
+# LOGS AND DEBUG
+# =============================================================================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dump.rdb
+*.log
 
-# System files
+# =============================================================================
+# SYSTEM FILES
+# =============================================================================
 .DS_Store
-*.pem
+Thumbs.db
 
-# Python
-__pycache__/
-*pyc*
-venv/
-.venv/
-
-# Development tools
-chainlit.md
-.chainlit
-.ipynb_checkpoints/
-.ac
-
-# Deployment
-.vercel
-
-# Data and databases
-agenthub/agents/youtube/db
-
-# Archive files and large assets
-**/*.zip
-**/*.tar.gz
-**/*.tar
-**/*.tgz
+# =============================================================================
+# ARCHIVES AND LARGE FILES
+# =============================================================================
+*.zip
+*.tar.gz
+*.tar
+*.tgz
 *.pack
 *.deb
 *.dylib
 
-# Build caches
+# =============================================================================
+# BUILD CACHES
+# =============================================================================
 .cache/
+.ipynb_checkpoints/
 
-# Mobile development
-android-sdk/ -e 
-# Environment files
-*.env
-*.env.*
-frontend/node_modules/.cache/default-development/2.pack
+# =============================================================================
+# DEPLOYMENT
+# =============================================================================
+.vercel
+
+# =============================================================================
+# TEST REPORTS (generated during testing)
+# =============================================================================
+test_reports/
+*.test.json
 frontend/node_modules/.cache/default-development/0.pack
 frontend/node_modules/.cache/default-development/1.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
+frontend/node_modules/.cache/default-development/2.pack
