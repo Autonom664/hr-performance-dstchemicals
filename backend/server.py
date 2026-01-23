@@ -787,6 +787,38 @@ async def update_report_conversation(
     return Conversation(**conversation)
 
 # ============ PDF EXPORT ============
+def strip_html_tags(text):
+    """Remove HTML tags and convert to plain text."""
+    if not text:
+        return ""
+    # Remove HTML tags
+    clean = re.sub(r'<[^>]+>', ' ', text)
+    # Decode HTML entities
+    clean = html.unescape(clean)
+    # Clean up whitespace
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    return clean
+
+class PDFReport(FPDF):
+    def __init__(self, title):
+        super().__init__()
+        self.title = title
+        
+    def header(self):
+        # Header background
+        self.set_fill_color(26, 26, 46)
+        self.rect(0, 0, 210, 35, 'F')
+        self.set_text_color(255, 255, 255)
+        self.set_font('Helvetica', 'B', 16)
+        self.cell(0, 15, self.title, ln=True, align='C')
+        self.ln(10)
+        
+    def footer(self):
+        self.set_y(-15)
+        self.set_text_color(128, 128, 128)
+        self.set_font('Helvetica', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', align='C')
+
 @api_router.get("/conversations/{conversation_id}/pdf")
 async def export_conversation_pdf(
     conversation_id: str,
@@ -810,167 +842,113 @@ async def export_conversation_pdf(
     employee = await db.users.find_one({"email": conversation["employee_email"]}, {"_id": 0})
     manager = await db.users.find_one({"email": conversation.get("manager_email")}, {"_id": 0}) if conversation.get("manager_email") else None
     
-    # Generate HTML for PDF
-    ratings = conversation.get("ratings", {})
-    ratings_html = ""
-    if ratings:
-        ratings_html = f"""
-        <div class="section">
-            <h3>Ratings</h3>
-            <div class="ratings">
-                <p><strong>Performance:</strong> {ratings.get('performance', 'N/A')} / 5</p>
-                <p><strong>Collaboration:</strong> {ratings.get('collaboration', 'N/A')} / 5</p>
-                <p><strong>Growth:</strong> {ratings.get('growth', 'N/A')} / 5</p>
-            </div>
-        </div>
-        """
+    # Create PDF
+    cycle_name = cycle.get('name', 'Performance Conversation') if cycle else 'Performance Conversation'
+    pdf = PDFReport(cycle_name)
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
     
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Performance Conversation - {employee.get('name', conversation['employee_email'])}</title>
-        <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 40px;
-            }}
-            h1 {{
-                color: #1a1a2e;
-                border-bottom: 3px solid #007AFF;
-                padding-bottom: 10px;
-            }}
-            h2 {{
-                color: #007AFF;
-                margin-top: 30px;
-            }}
-            h3 {{
-                color: #555;
-                margin-top: 20px;
-            }}
-            .header {{
-                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                color: white;
-                padding: 30px;
-                margin: -40px -40px 30px -40px;
-            }}
-            .header h1 {{
-                color: white;
-                border-bottom: none;
-                margin: 0;
-            }}
-            .meta {{
-                display: flex;
-                flex-wrap: wrap;
-                gap: 20px;
-                margin-top: 15px;
-                font-size: 14px;
-            }}
-            .meta-item {{
-                background: rgba(255,255,255,0.1);
-                padding: 5px 15px;
-                border-radius: 4px;
-            }}
-            .section {{
-                margin: 25px 0;
-                padding: 20px;
-                background: #f8f9fa;
-                border-radius: 8px;
-                border-left: 4px solid #007AFF;
-            }}
-            .section h3 {{
-                margin-top: 0;
-                color: #1a1a2e;
-            }}
-            .content {{
-                white-space: pre-wrap;
-            }}
-            .status {{
-                display: inline-block;
-                padding: 5px 15px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: bold;
-                text-transform: uppercase;
-            }}
-            .status-completed {{
-                background: #d4edda;
-                color: #155724;
-            }}
-            .status-in_progress {{
-                background: #fff3cd;
-                color: #856404;
-            }}
-            .status-ready_for_manager {{
-                background: #cce5ff;
-                color: #004085;
-            }}
-            .status-not_started {{
-                background: #f8d7da;
-                color: #721c24;
-            }}
-            .ratings p {{
-                margin: 5px 0;
-            }}
-            .footer {{
-                margin-top: 40px;
-                padding-top: 20px;
-                border-top: 1px solid #ddd;
-                font-size: 12px;
-                color: #666;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>{cycle.get('name', 'Performance Conversation') if cycle else 'Performance Conversation'}</h1>
-            <div class="meta">
-                <div class="meta-item"><strong>Employee:</strong> {employee.get('name', '')} ({conversation['employee_email']})</div>
-                <div class="meta-item"><strong>Department:</strong> {employee.get('department', 'N/A') if employee else 'N/A'}</div>
-                <div class="meta-item"><strong>Manager:</strong> {manager.get('name', conversation.get('manager_email', 'N/A')) if manager else conversation.get('manager_email', 'N/A')}</div>
-                <div class="meta-item"><strong>Meeting Date:</strong> {conversation.get('meeting_date', 'Not scheduled')}</div>
-            </div>
-        </div>
-        
-        <p><span class="status status-{conversation.get('status', 'not_started')}">{conversation.get('status', 'Not Started').replace('_', ' ')}</span></p>
-        
-        <div class="section">
-            <h3>Employee Self-Review</h3>
-            <div class="content">{conversation.get('employee_self_review', 'No content provided.')}</div>
-        </div>
-        
-        <div class="section">
-            <h3>Manager Review</h3>
-            <div class="content">{conversation.get('manager_review', 'No content provided.')}</div>
-        </div>
-        
-        <div class="section">
-            <h3>Goals for Next Period</h3>
-            <div class="content">{conversation.get('goals_next_period', 'No goals defined.')}</div>
-        </div>
-        
-        {ratings_html}
-        
-        <div class="footer">
-            <p>Generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
-            <p>Last updated by: {conversation.get('updated_by_email', 'N/A')}</p>
-        </div>
-    </body>
-    </html>
-    """
+    # Reset text color after header
+    pdf.set_text_color(0, 0, 0)
     
-    # Generate PDF
-    pdf = HTML(string=html_content).write_pdf()
+    # Employee Info Section
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_fill_color(0, 122, 255)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, 'Employee Information', ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.ln(3)
     
-    filename = f"performance_review_{conversation['employee_email'].split('@')[0]}_{cycle.get('name', 'conversation').replace(' ', '_')}.pdf"
+    employee_name = employee.get('name', '') if employee else ''
+    employee_email = conversation['employee_email']
+    department = employee.get('department', 'N/A') if employee else 'N/A'
+    manager_name = manager.get('name', conversation.get('manager_email', 'N/A')) if manager else conversation.get('manager_email', 'N/A')
+    meeting_date = conversation.get('meeting_date', 'Not scheduled')
+    status = conversation.get('status', 'not_started').replace('_', ' ').title()
+    
+    pdf.cell(40, 6, 'Employee:', 0)
+    pdf.cell(0, 6, f"{employee_name} ({employee_email})", ln=True)
+    pdf.cell(40, 6, 'Department:', 0)
+    pdf.cell(0, 6, department, ln=True)
+    pdf.cell(40, 6, 'Manager:', 0)
+    pdf.cell(0, 6, str(manager_name), ln=True)
+    pdf.cell(40, 6, 'Meeting Date:', 0)
+    pdf.cell(0, 6, str(meeting_date), ln=True)
+    pdf.cell(40, 6, 'Status:', 0)
+    pdf.cell(0, 6, status, ln=True)
+    pdf.ln(8)
+    
+    # Self Review Section
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_fill_color(0, 255, 148)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, 'Employee Self-Review', ln=True, fill=True)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.ln(3)
+    self_review = strip_html_tags(conversation.get('employee_self_review', '')) or 'No content provided.'
+    pdf.multi_cell(0, 6, self_review)
+    pdf.ln(8)
+    
+    # Goals Section
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_fill_color(0, 122, 255)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, 'Goals for Next Period', ln=True, fill=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.ln(3)
+    goals = strip_html_tags(conversation.get('goals_next_period', '')) or 'No goals defined.'
+    pdf.multi_cell(0, 6, goals)
+    pdf.ln(8)
+    
+    # Manager Review Section
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_fill_color(255, 193, 7)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, 'Manager Review', ln=True, fill=True)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.ln(3)
+    manager_review = strip_html_tags(conversation.get('manager_review', '')) or 'No review provided.'
+    pdf.multi_cell(0, 6, manager_review)
+    pdf.ln(8)
+    
+    # Ratings Section
+    ratings = conversation.get('ratings', {})
+    if ratings and any(ratings.values()):
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_fill_color(128, 128, 128)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 8, 'Ratings', ln=True, fill=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font('Helvetica', '', 10)
+        pdf.ln(3)
+        
+        if ratings.get('performance'):
+            pdf.cell(50, 6, 'Performance:', 0)
+            pdf.cell(0, 6, f"{ratings['performance']} / 5", ln=True)
+        if ratings.get('collaboration'):
+            pdf.cell(50, 6, 'Collaboration:', 0)
+            pdf.cell(0, 6, f"{ratings['collaboration']} / 5", ln=True)
+        if ratings.get('growth'):
+            pdf.cell(50, 6, 'Growth:', 0)
+            pdf.cell(0, 6, f"{ratings['growth']} / 5", ln=True)
+        pdf.ln(5)
+    
+    # Footer info
+    pdf.ln(10)
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.set_text_color(128, 128, 128)
+    pdf.cell(0, 5, f"Generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", ln=True)
+    pdf.cell(0, 5, f"Last updated by: {conversation.get('updated_by_email', 'N/A')}", ln=True)
+    
+    # Output PDF
+    pdf_bytes = pdf.output()
+    
+    filename = f"performance_review_{conversation['employee_email'].split('@')[0]}_{cycle_name.replace(' ', '_')}.pdf"
     
     return StreamingResponse(
-        io.BytesIO(pdf),
+        io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
