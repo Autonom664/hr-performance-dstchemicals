@@ -37,6 +37,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('session_token'));
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const axiosInstance = axios.create({
     baseURL: API_URL,
@@ -56,9 +57,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axiosInstance.get('/auth/me');
       setUser(response.data);
+      setMustChangePassword(response.data.must_change_password || false);
       return response.data;
     } catch (error) {
       setUser(null);
+      setMustChangePassword(false);
       localStorage.removeItem('session_token');
       setToken(null);
       return null;
@@ -75,18 +78,25 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token, fetchUser]);
 
-  const startEmailAuth = async (email) => {
-    const response = await axiosInstance.post('/auth/email/start', { email });
-    return response.data;
-  };
-
-  const verifyEmailCode = async (email, code) => {
-    const response = await axiosInstance.post('/auth/email/verify', { email, code });
+  // Password-based login
+  const login = async (email, password) => {
+    const response = await axiosInstance.post('/auth/login', { email, password });
     if (response.data.token) {
       localStorage.setItem('session_token', response.data.token);
       setToken(response.data.token);
     }
     setUser(response.data.user);
+    setMustChangePassword(response.data.must_change_password || false);
+    return response.data;
+  };
+
+  // Change password
+  const changePassword = async (currentPassword, newPassword) => {
+    const response = await axiosInstance.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    setMustChangePassword(false);
     return response.data;
   };
 
@@ -97,6 +107,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
+      setMustChangePassword(false);
       localStorage.removeItem('session_token');
       setToken(null);
     }
@@ -114,9 +125,10 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     token,
+    mustChangePassword,
     axiosInstance,
-    startEmailAuth,
-    verifyEmailCode,
+    login,
+    changePassword,
     logout,
     fetchUser,
     hasRole,

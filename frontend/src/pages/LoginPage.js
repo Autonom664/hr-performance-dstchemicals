@@ -1,74 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Loader2, Mail, KeyRound, ArrowRight, Building2 } from 'lucide-react';
+import { Loader2, Mail, Lock, ArrowRight, Building2, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { startEmailAuth, verifyEmailCode, user } = useAuth();
-  const [step, setStep] = useState('email'); // 'email' or 'verify'
+  const { login, changePassword, user, mustChangePassword } = useAuth();
+  const [step, setStep] = useState('login'); // 'login' or 'change-password'
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [displayCode, setDisplayCode] = useState(null);
+  
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Redirect if already logged in
-  React.useEffect(() => {
-    if (user) {
-      if (user.roles?.includes('admin')) {
-        navigate('/admin');
-      } else if (user.roles?.includes('manager')) {
-        navigate('/manager');
-      } else {
-        navigate('/employee');
-      }
+  // Handle redirect for authenticated users
+  useEffect(() => {
+    if (user && !mustChangePassword) {
+      redirectByRole(user);
+    } else if (user && mustChangePassword) {
+      setStep('change-password');
+      setCurrentPassword(password); // Pre-fill with login password
     }
-  }, [user, navigate]);
+  }, [user, mustChangePassword]);
 
-  const handleEmailSubmit = async (e) => {
+  const redirectByRole = (userData) => {
+    if (userData.roles?.includes('admin')) {
+      navigate('/admin');
+    } else if (userData.roles?.includes('manager')) {
+      navigate('/manager');
+    } else {
+      navigate('/employee');
+    }
+  };
+
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !password) return;
 
     setLoading(true);
     try {
-      const response = await startEmailAuth(email.toLowerCase());
-      if (response.code) {
-        setDisplayCode(response.code);
+      const response = await login(email.toLowerCase(), password);
+      
+      if (response.must_change_password) {
+        setStep('change-password');
+        setCurrentPassword(password);
+        toast.info('Please change your password to continue');
+      } else {
+        toast.success('Login successful!');
+        redirectByRole(response.user);
       }
-      setStep('verify');
-      toast.success('Verification code sent!');
     } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to send verification code';
+      const message = error.response?.data?.detail || 'Invalid email or password';
       toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifySubmit = async (e) => {
+  const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
-    if (!code) return;
+    
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
 
     setLoading(true);
     try {
-      const response = await verifyEmailCode(email.toLowerCase(), code);
-      toast.success('Login successful!');
-      
-      // Navigate based on role
-      if (response.user?.roles?.includes('admin')) {
-        navigate('/admin');
-      } else if (response.user?.roles?.includes('manager')) {
-        navigate('/manager');
-      } else {
-        navigate('/employee');
-      }
+      await changePassword(currentPassword, newPassword);
+      toast.success('Password changed successfully!');
+      redirectByRole(user);
     } catch (error) {
-      const message = error.response?.data?.detail || 'Invalid verification code';
+      const message = error.response?.data?.detail || 'Failed to change password';
       toast.error(message);
     } finally {
       setLoading(false);
@@ -94,18 +111,18 @@ const LoginPage = () => {
         <Card className="bg-[#121212] border-white/5">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-xl font-semibold">
-              {step === 'email' ? 'Sign in to your account' : 'Enter verification code'}
+              {step === 'login' ? 'Sign in to your account' : 'Change your password'}
             </CardTitle>
             <CardDescription className="text-gray-400">
-              {step === 'email' 
-                ? 'Enter your company email to receive a verification code'
-                : `We sent a code to ${email}`
+              {step === 'login' 
+                ? 'Enter your email and password'
+                : 'You must change your password before continuing'
               }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {step === 'email' ? (
-              <form onSubmit={handleEmailSubmit} className="space-y-4">
+            {step === 'login' ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm text-gray-300">Email address</Label>
                   <div className="relative">
@@ -119,84 +136,132 @@ const LoginPage = () => {
                       className="pl-10 bg-[#1E1E1E] border-white/10 h-11"
                       data-testid="login-email-input"
                       required
+                      autoComplete="email"
                     />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm text-gray-300">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10 bg-[#1E1E1E] border-white/10 h-11"
+                      data-testid="login-password-input"
+                      required
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
                 <Button 
                   type="submit" 
                   className="w-full h-11 bg-[#007AFF] hover:bg-[#007AFF]/90 btn-glow"
                   disabled={loading}
-                  data-testid="login-continue-btn"
+                  data-testid="login-submit-btn"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   ) : null}
-                  Continue
+                  Sign In
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleVerifySubmit} className="space-y-4">
-                {displayCode && (
-                  <div className="p-4 rounded-lg bg-[#007AFF]/10 border border-[#007AFF]/20 mb-4">
-                    <p className="text-xs text-gray-400 mb-1">Your verification code (dev mode):</p>
-                    <p className="text-2xl font-mono font-bold text-[#007AFF] tracking-widest">{displayCode}</p>
-                  </div>
-                )}
+              <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+                <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
+                  <p className="text-sm text-yellow-400">
+                    This is your first login. Please set a new password to continue.
+                  </p>
+                </div>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="code" className="text-sm text-gray-300">Verification code</Label>
+                  <Label htmlFor="current-password" className="text-sm text-gray-300">Current Password</Label>
                   <div className="relative">
                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <Input
-                      id="code"
-                      type="text"
-                      placeholder="Enter 6-digit code"
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      className="pl-10 bg-[#1E1E1E] border-white/10 h-11 font-mono text-lg tracking-widest"
-                      data-testid="login-code-input"
-                      maxLength={6}
+                      id="current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="pl-10 bg-[#1E1E1E] border-white/10 h-11"
+                      data-testid="current-password-input"
                       required
+                      autoComplete="current-password"
                     />
                   </div>
                 </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="new-password" className="text-sm text-gray-300">New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Input
+                      id="new-password"
+                      type="password"
+                      placeholder="At least 8 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="pl-10 bg-[#1E1E1E] border-white/10 h-11"
+                      data-testid="new-password-input"
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password" className="text-sm text-gray-300">Confirm New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      placeholder="Repeat your new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="pl-10 bg-[#1E1E1E] border-white/10 h-11"
+                      data-testid="confirm-password-input"
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+                
                 <Button 
                   type="submit" 
                   className="w-full h-11 bg-[#007AFF] hover:bg-[#007AFF]/90 btn-glow"
                   disabled={loading}
-                  data-testid="login-verify-btn"
+                  data-testid="change-password-btn"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   ) : null}
-                  Verify & Sign in
-                </Button>
-                <Button 
-                  type="button"
-                  variant="ghost" 
-                  className="w-full text-gray-400 hover:text-white"
-                  onClick={() => {
-                    setStep('email');
-                    setCode('');
-                    setDisplayCode(null);
-                  }}
-                  data-testid="login-back-btn"
-                >
-                  Use a different email
+                  Change Password & Continue
                 </Button>
               </form>
             )}
           </CardContent>
         </Card>
 
-        {/* Demo accounts hint */}
+        {/* Security notice */}
         <div className="mt-6 p-4 rounded-lg bg-white/5 border border-white/10">
-          <p className="text-xs text-gray-400 mb-2">Demo accounts:</p>
-          <div className="space-y-1 text-xs font-mono text-gray-500">
-            <p>Admin: admin@company.com</p>
-            <p>Manager: engineering.lead@company.com</p>
-            <p>Employee: developer1@company.com</p>
-          </div>
+          <p className="text-xs text-gray-400">
+            Your password was provided by your administrator. If you haven't received it, please contact HR.
+          </p>
         </div>
       </div>
     </div>
