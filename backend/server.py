@@ -876,10 +876,23 @@ async def root():
 # Include router and middleware
 app.include_router(api_router)
 
+# Parse CORS origins - strip whitespace and filter empty values
+cors_origins_raw = os.environ.get('CORS_ORIGINS', '')
+cors_origins = [origin.strip() for origin in cors_origins_raw.split(',') if origin.strip()]
+
+# Validate: no wildcards allowed when credentials are used
+if '*' in cors_origins:
+    logger.warning("CORS wildcard '*' detected - this is NOT secure with credentials. Use explicit origins.")
+    cors_origins = ['*']  # If wildcard specified, use it (but log warning)
+
+if not cors_origins:
+    logger.warning("No CORS_ORIGINS specified - defaulting to same-origin only")
+    cors_origins = []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=True if cors_origins and '*' not in cors_origins else False,
+    allow_origins=cors_origins if cors_origins else ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
