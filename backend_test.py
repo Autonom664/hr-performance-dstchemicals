@@ -407,71 +407,75 @@ class HRSecurityTester:
         success, data = self.make_request('GET', '/conversations/me', user_email=email)
         return data if success else None
 
-    def run_full_test_suite(self):
-        """Run comprehensive test suite"""
-        print("🚀 Starting HR Performance Management API Tests")
-        print("=" * 60)
+    def run_security_hardening_tests(self):
+        """Run comprehensive security hardening verification"""
+        print("🔐 HR PERFORMANCE MANAGEMENT - SECURITY HARDENING VERIFICATION")
+        print("=" * 70)
+        print("Target: hr-staging.dstchemicals.com")
+        print("Focus: Authorization isolation, Session security, Cycle integrity, PDF completeness, Data persistence")
+        print("=" * 70)
 
         # Test 1: Health Check
-        if not self.test_health_check():
+        success, data = self.make_request('GET', '/health')
+        self.log_test("Health Check", success, 
+                     f"Status: {data.get('status', 'unknown')}, Auth Mode: {data.get('auth_mode', 'unknown')}")
+        
+        if not success:
             print("❌ Health check failed - stopping tests")
             return False
 
-        # Test 2: Authentication Flow - Admin
-        print("\n📧 Testing Admin Authentication...")
-        admin_code = self.test_email_auth_start("admin@company.com")
-        if not admin_code:
-            print("❌ Admin auth start failed - stopping tests")
-            return False
+        # Test 2: Authorization Isolation
+        if not self.test_authorization_isolation():
+            print("⚠️ Authorization tests had issues")
 
-        if not self.test_email_auth_verify("admin@company.com", admin_code):
-            print("❌ Admin auth verify failed - stopping tests")
-            return False
+        # Test 3: Session Security
+        if not self.test_session_security():
+            print("⚠️ Session security tests had issues")
 
-        self.test_auth_me()
+        # Test 4: Cycle Integrity
+        if not self.test_cycle_integrity():
+            print("⚠️ Cycle integrity tests had issues")
 
-        # Test 3: Admin Functions
-        print("\n👑 Testing Admin Functions...")
-        self.test_admin_get_users()
-        self.test_admin_import_users()
-        cycles = self.test_admin_get_cycles()
-        
-        # Create a test cycle
-        cycle_id = self.test_admin_create_cycle()
-        if cycle_id:
-            self.test_admin_update_cycle_status(cycle_id)
+        # Test 5: PDF Export Completeness
+        if not self.test_pdf_completeness():
+            print("⚠️ PDF completeness tests had issues")
 
-        # Test 4: Employee Functions
-        print("\n👤 Testing Employee Functions...")
-        self.test_get_active_cycle()
-        conversation = self.test_get_my_conversation()
-        self.test_update_my_conversation()
-
-        # Test 5: Manager Authentication and Functions
-        print("\n👔 Testing Manager Authentication...")
-        manager_code = self.test_email_auth_start("engineering.lead@company.com")
-        if manager_code:
-            if self.test_email_auth_verify("engineering.lead@company.com", manager_code):
-                self.test_manager_get_reports()
-
-        # Test 6: Employee Authentication
-        print("\n👨‍💼 Testing Employee Authentication...")
-        employee_code = self.test_email_auth_start("developer1@company.com")
-        if employee_code:
-            if self.test_email_auth_verify("developer1@company.com", employee_code):
-                employee_conversation = self.test_get_my_conversation()
-                if employee_conversation and employee_conversation.get('id'):
-                    self.test_pdf_export(employee_conversation['id'])
+        # Test 6: Data Persistence
+        if not self.test_data_persistence():
+            print("⚠️ Data persistence tests had issues")
 
         # Print Results
-        print("\n" + "=" * 60)
-        print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
+        print("\n" + "=" * 70)
+        print(f"🔍 SECURITY VERIFICATION RESULTS: {self.tests_passed}/{self.tests_run} tests passed")
+        
+        # Categorize results
+        critical_failures = []
+        warnings = []
+        
+        for result in self.test_results:
+            if not result['success']:
+                if any(keyword in result['name'].lower() for keyword in ['authorization', 'session', 'access']):
+                    critical_failures.append(result['name'])
+                else:
+                    warnings.append(result['name'])
+        
+        if critical_failures:
+            print(f"\n🚨 CRITICAL SECURITY ISSUES ({len(critical_failures)}):")
+            for failure in critical_failures:
+                print(f"   - {failure}")
+        
+        if warnings:
+            print(f"\n⚠️  WARNINGS ({len(warnings)}):")
+            for warning in warnings:
+                print(f"   - {warning}")
         
         if self.tests_passed == self.tests_run:
-            print("🎉 All tests passed!")
+            print("\n✅ SECURITY HARDENING VERIFICATION PASSED")
+            print("   All authorization boundaries, session security, and data integrity checks passed.")
             return True
         else:
-            print(f"⚠️  {self.tests_run - self.tests_passed} tests failed")
+            print(f"\n❌ SECURITY HARDENING VERIFICATION FAILED")
+            print(f"   {self.tests_run - self.tests_passed} security issues found")
             return False
 
 def main():
