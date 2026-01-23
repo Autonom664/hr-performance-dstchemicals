@@ -968,12 +968,31 @@ async def export_conversation_pdf(
             pdf.cell(0, 6, f"{ratings['growth']} / 5", ln=True)
         pdf.ln(5)
     
+    # Timestamps Section
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 7, 'Record Information', ln=True, fill=True)
+    pdf.set_font('Helvetica', '', 9)
+    pdf.ln(2)
+    
+    created_at = conversation.get('created_at', 'N/A')
+    updated_at = conversation.get('updated_at', 'N/A')
+    updated_by = conversation.get('updated_by_email', 'N/A')
+    
+    pdf.cell(40, 5, 'Created:', 0)
+    pdf.cell(0, 5, str(created_at)[:19] if created_at != 'N/A' else 'N/A', ln=True)
+    pdf.cell(40, 5, 'Last Updated:', 0)
+    pdf.cell(0, 5, str(updated_at)[:19] if updated_at != 'N/A' else 'N/A', ln=True)
+    pdf.cell(40, 5, 'Updated By:', 0)
+    pdf.cell(0, 5, str(updated_by), ln=True)
+    
     # Footer info
     pdf.ln(10)
     pdf.set_font('Helvetica', 'I', 8)
     pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 5, f"Generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", ln=True)
-    pdf.cell(0, 5, f"Last updated by: {conversation.get('updated_by_email', 'N/A')}", ln=True)
+    pdf.cell(0, 5, f"PDF Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}", ln=True)
+    pdf.cell(0, 5, f"Conversation ID: {conversation.get('id', 'N/A')}", ln=True)
     
     # Output PDF
     pdf_bytes = pdf.output()
