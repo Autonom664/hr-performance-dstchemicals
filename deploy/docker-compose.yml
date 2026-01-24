@@ -30,7 +30,7 @@ services:
   # FastAPI Backend - localhost only, nginx proxies to it
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     container_name: hr-backend
     restart: unless-stopped
@@ -70,7 +70,7 @@ services:
   # React Frontend (Nginx) - localhost only, nginx proxies to it
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
       args:
         # For same-origin deployment, use empty string (frontend will use relative /api paths)

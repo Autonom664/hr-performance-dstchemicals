@@ -2,17 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for WeasyPrint
+# Install system dependencies for PDF generation (fpdf2)
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libffi-dev \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libcairo2 \
-    libgirepository1.0-dev \
-    gir1.2-pango-1.0 \
-    fonts-liberation \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

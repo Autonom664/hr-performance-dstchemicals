@@ -4,10 +4,12 @@ FROM node:20-alpine as build
 WORKDIR /app
 
 # Copy package files
-COPY package.json yarn.lock ./
+COPY package.json ./
 
-# Install dependencies
-RUN yarn install --frozen-lockfile
+# Install dependencies with legacy peer deps and force
+# Then explicitly install ajv-related packages to fix webpack schema-utils issue
+RUN npm install --legacy-peer-deps --force && \
+    npm install ajv@^8.12.0 ajv-keywords@^5.1.0 --legacy-peer-deps --force
 
 # Copy source code
 COPY . .
@@ -16,8 +18,9 @@ COPY . .
 ARG REACT_APP_BACKEND_URL
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
-# Build the app
-RUN yarn build
+# Build the app with increased memory
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine
