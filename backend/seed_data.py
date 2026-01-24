@@ -3,6 +3,13 @@
 Seed data script for HR Performance Management app.
 Run this to populate the database with demo data including passwords.
 
+⚠️ WARNING: FOR LOCAL DEVELOPMENT ONLY - DO NOT RUN IN PRODUCTION ⚠️
+
+Production deployment should:
+1. Start with an EMPTY database
+2. Create ONE admin account manually
+3. Import real employee data via CSV upload in admin panel
+
 Demo accounts (password: Demo@123456):
   - admin@company.com (Admin)
   - engineering.lead@company.com (Manager)

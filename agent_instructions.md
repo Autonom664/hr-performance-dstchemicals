@@ -1,21 +1,23 @@
-# OVH Deployment Instructions
+# OVH Production Deployment Instructions
 
 This document contains tasks that **cannot be completed inside Emergent** and must be performed manually on the OVH server.
 
-**Target Domain:** `hr-staging.dstchemicals.com`  
-**Repository:** `https://github.com/Autonom664/HR` (private)
+**Target Domain:** `hr.dstchemicals.com`  
+**Repository:** `https://github.com/Autonom664/hr-performance-dstchemicals` (private)
+
+**⚠️ IMPORTANT:** Deploy with **empty database**. Create only ONE admin account. HR will import employee CSV data after deployment.
 
 ---
 
 ## Pre-Deployment Checklist
 
-- [ ] DNS A record configured
+- [ ] DNS A record configured for hr.dstchemicals.com
 - [ ] Server has Docker, nginx, certbot installed
 - [ ] Firewall allows only ports 22, 80, 443
 - [ ] TLS certificate obtained
 - [ ] nginx reverse proxy configured
 - [ ] Application deployed and running
-- [ ] Demo data seeded
+- [ ] Single admin account created (NO demo data)
 - [ ] Backup strategy configured
 
 ---
@@ -26,11 +28,11 @@ Create an A record pointing to your OVH server IP:
 
 | Type | Name | Value | TTL |
 |------|------|-------|-----|
-| A | hr-staging | `YOUR_OVH_SERVER_IP` | 3600 |
+| A | hr | `YOUR_OVH_SERVER_IP` | 3600 |
 
 **Verify:**
 ```bash
-dig hr-staging.dstchemicals.com +short
+dig hr.dstchemicals.com +short
 # Should return your OVH server IP
 ```
 
@@ -98,8 +100,8 @@ To                         Action      From
 ```bash
 cd /opt/hr-performance
 
-# Clone the private repo
-git clone https://github.com/Autonom664/HR.git .
+# Clone the repository
+git clone https://github.com/Autonom664/hr-performance-dstchemicals.git .
 
 # Navigate to deploy directory
 cd deploy
@@ -121,7 +123,7 @@ MONGO_ROOT_PASSWORD=<paste-generated-password-here>
 
 # Verify these settings (should already be correct):
 REACT_APP_BACKEND_URL=
-CORS_ORIGINS=https://hr-staging.dstchemicals.com
+CORS_ORIGINS=https://hr.dstchemicals.com
 COOKIE_SECURE=true
 AUTH_MODE=password
 ```
@@ -135,11 +137,11 @@ AUTH_MODE=password
 sudo systemctl stop nginx
 
 # Obtain certificate (standalone mode)
-sudo certbot certonly --standalone -d hr-staging.dstchemicals.com
+sudo certbot certonly --standalone -d hr.dstchemicals.com
 
 # Certificate paths:
-# /etc/letsencrypt/live/hr-staging.dstchemicals.com/fullchain.pem
-# /etc/letsencrypt/live/hr-staging.dstchemicals.com/privkey.pem
+# /etc/letsencrypt/live/hr.dstchemicals.com/fullchain.pem
+# /etc/letsencrypt/live/hr.dstchemicals.com/privkey.pem
 
 # Start nginx
 sudo systemctl start nginx
@@ -155,7 +157,7 @@ sudo certbot renew --dry-run
 Create nginx site configuration:
 
 ```bash
-sudo nano /etc/nginx/sites-available/hr-staging
+sudo nano /etc/nginx/sites-available/hr
 ```
 
 **Paste this configuration:**
@@ -165,7 +167,7 @@ sudo nano /etc/nginx/sites-available/hr-staging
 server {
     listen 80;
     listen [::]:80;
-    server_name hr-staging.dstchemicals.com;
+    server_name hr.dstchemicals.com;
     return 301 https://$server_name$request_uri;
 }
 
@@ -173,10 +175,10 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name hr-staging.dstchemicals.com;
+    server_name hr.dstchemicals.com;
 
-    ssl_certificate /etc/letsencrypt/live/hr-staging.dstchemicals.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/hr-staging.dstchemicals.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/hr.dstchemicals.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hr.dstchemicals.com/privkey.pem;
     
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
@@ -218,14 +220,14 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    access_log /var/log/nginx/hr-staging.access.log;
-    error_log /var/log/nginx/hr-staging.error.log;
+    access_log /var/log/nginx/hr.access.log;
+    error_log /var/log/nginx/hr.error.log;
 }
 ```
 
 **Enable the site:**
 ```bash
-sudo ln -s /etc/nginx/sites-available/hr-staging /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/hr /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -246,30 +248,83 @@ docker compose ps
 
 # View logs
 docker compose logs -f
-
-# Seed demo data (first time only)
-docker exec hr-backend python seed_data.py
 ```
+
+**⚠️ DO NOT seed demo data in production.** Proceed to create admin account manually.
 
 ---
 
-## 8. Verification
+## 8. Create Admin Account
+
+**Option 1: Using Backend API (Recommended)**
+
+```bash
+# Create admin account via backend container
+docker exec -it hr-backend python -c "
+import asyncio
+from motor.motor_asyncio import AsyncIOMotorClient
+import bcrypt
+import os
+import uuid
+from datetime import datetime, timezone
+
+async def create_admin():
+    mongo_url = os.environ['MONGO_URL']
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[os.environ['DB_NAME']]
+    
+    admin_email = input('Admin email: ').lower()
+    admin_name = input('Admin name: ')
+    admin_password = input('Admin password (min 12 chars): ')
+    
+    password_hash = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    await db.users.insert_one({
+        'id': str(uuid.uuid4()),
+        'email': admin_email,
+        'name': admin_name,
+        'department': 'HR',
+        'manager_email': None,
+        'roles': ['employee', 'admin'],
+        'is_active': True,
+        'must_change_password': False,
+        'password_hash': password_hash,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    })
+    print(f'✅ Admin account created: {admin_email}')
+    client.close()
+
+asyncio.run(create_admin())
+"
+```
+
+**Option 2: Direct MongoDB Insert**
+
+If you prefer, you can use MongoDB shell to create the admin account.
+
+---
+
+## 9. Verification
 
 ```bash
 # Test health endpoint
-curl -s https://hr-staging.dstchemicals.com/api/health
-# Expected: {"status":"healthy","auth_mode":"password","version":"2.0.0"}
+curl -s https://hr.dstchemicals.com/api/health
+# Expected: {"status":"healthy","auth_mode":"password"}
 
-# Test login with demo account
-curl -s -X POST https://hr-staging.dstchemicals.com/api/auth/login \
+# Test login with admin account
+curl -s -X POST https://hr.dstchemicals.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@company.com","password":"Demo@123456"}'
+  -d '{"email":"YOUR_ADMIN_EMAIL","password":"YOUR_ADMIN_PASSWORD"}'
 # Expected: JSON with user info and token
+
+# Access the application
+# Open browser: https://hr.dstchemicals.com
 ```
 
 ---
 
-## 9. MongoDB Backup Strategy
+## 10. MongoDB Backup Strategy
 
 ### Manual Backup
 

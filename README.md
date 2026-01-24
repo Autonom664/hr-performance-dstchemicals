@@ -4,8 +4,8 @@ A portable, self-hosted HR Performance Management web application for annual per
 
 **This system does NOT use numeric ratings.** Performance feedback is qualitative only.
 
-**Repository:** `https://github.com/Autonom664/HR` (private)  
-**Target Staging Domain:** `hr-staging.dstchemicals.com`
+**Repository:** `https://github.com/Autonom664/hr-performance-dstchemicals` (private)  
+**Production Domain:** `hr.dstchemicals.com`
 
 ---
 
@@ -76,8 +76,8 @@ A portable, self-hosted HR Performance Management web application for annual per
 
 ```bash
 # Clone repository
-git clone https://github.com/Autonom664/HR.git hr-performance
-cd hr-performance/deploy
+git clone https://github.com/Autonom664/hr-performance-dstchemicals.git
+cd hr-performance-dstchemicals/deploy
 
 # Copy and configure environment
 cp .env.example .env
@@ -86,7 +86,7 @@ cp .env.example .env
 # Start services
 docker compose up -d
 
-# Seed demo data (first time only)
+# Seed demo data (local development only - NOT for production)
 docker exec hr-backend python seed_data.py
 
 # Access the app at http://localhost:3000

@@ -46,10 +46,10 @@ Frontend auto-reloads via Craco. Backend hot-reloads via `uvicorn --reload`.
 ### Seeding Demo Data
 [seed_data.py](backend/seed_data.py) creates 3-tier hierarchy (Admin → CTO → Engineering Lead → Developers) with demo conversations. All demo users use password `Demo@123456` and `must_change_password: false`.
 
-### Deployment to OVH (staging-hr.dstchemicals.com)
+### Deployment to OVH (hr.dstchemicals.com)
 Follow [agent_instructions.md](agent_instructions.md) for nginx setup, TLS with certbot, and firewall rules. Backend/frontend bind to `127.0.0.1` only; nginx proxies external traffic.
 
-**Initial deployment:** Deploy with empty database—only create one admin account. HR will import employee data via CSV after deployment is complete.
+**Production deployment:** Deploy with empty database. Create ONE admin account manually (no demo data). HR imports employee data via CSV after deployment.
 
 ## Project-Specific Conventions
 
@@ -73,7 +73,7 @@ Follow [agent_instructions.md](agent_instructions.md) for nginx setup, TLS with 
 ## Integration Points
 
 ### CORS Configuration
-Backend `CORS_ORIGINS` must be explicit (no wildcards in production). Set to frontend domain like `https://hr-staging.dstchemicals.com`.
+Backend `CORS_ORIGINS` must be explicit (no wildcards in production). Set to frontend domain like `https://hr.dstchemicals.com`.
 
 ### Environment Variables
 - **Same-origin deployment:** `REACT_APP_BACKEND_URL=""` (frontend uses relative `/api` paths)
