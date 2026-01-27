@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Loader2, FileText, Calendar, Target, Save, Send, Download, MessageSquare, History, ChevronRight, Clock } from 'lucide-react';
+import { Loader2, FileText, Calendar, Target, Save, Send, Download, MessageSquare, History, ChevronRight, Clock, Info, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_LABELS = {
@@ -264,6 +264,17 @@ const EmployeeDashboard = () => {
             <p className="text-gray-400 mt-1">Your performance review conversation</p>
           </div>
         </div>
+
+        {/* Help Text Card */}
+        <Card className="bg-blue-500/5 border border-blue-500/20">
+          <CardContent className="p-4 flex gap-3">
+            <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-gray-300">
+              <p className="font-semibold text-blue-400 mb-1">How This Works</p>
+              <p>Save your responses as <span className="font-semibold">drafts</span> while working on them. Your manager won't see any changes until you click <span className="font-semibold">"Submit to Manager"</span>. You can always edit and re-save before submitting. Once submitted, your manager can review and provide feedback.</p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Tabs for Current vs History */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>

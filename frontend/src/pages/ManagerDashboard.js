@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Loader2, Users, ChevronRight, FileText, Calendar, Save, CheckCircle, Download, ArrowLeft, Target, MessageSquare, History, Clock } from 'lucide-react';
+import { Loader2, Users, ChevronRight, FileText, Calendar, Save, CheckCircle, Download, ArrowLeft, Target, MessageSquare, History, Clock, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_LABELS = {
@@ -538,6 +538,17 @@ const ManagerDashboard = () => {
             {cycle ? cycle.name : 'No active cycle'} • {reports.length} direct reports
           </p>
         </div>
+
+        {/* Help Text Card */}
+        <Card className="bg-blue-500/5 border border-blue-500/20">
+          <CardContent className="p-4 flex gap-3">
+            <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-gray-300">
+              <p className="font-semibold text-blue-400 mb-1">What You Can See</p>
+              <p>You can only see your team members' conversations after they submit them. Drafts are private to the employee while they're working on them. Once a team member clicks "Submit to Manager", you'll be notified and can review their responses.</p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

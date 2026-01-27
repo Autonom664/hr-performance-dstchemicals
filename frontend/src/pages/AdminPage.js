@@ -345,6 +345,21 @@ const AdminPage = () => {
           </div>
         </div>
 
+        {/* Help Text Card */}
+        <Card className="bg-blue-500/5 border border-blue-500/20">
+          <CardContent className="p-4 flex gap-3">
+            <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-gray-300">
+              <p className="font-semibold text-blue-400 mb-1">Important</p>
+              <ul className="space-y-1 ml-4 list-disc text-gray-300">
+                <li><span className="font-semibold">Reset Password:</span> Generate a one-time password for a user. They must change it on their next login.</li>
+                <li><span className="font-semibold">Delete User:</span> Permanently removes user and all their conversation data.</li>
+                <li><span className="font-semibold">Delete Cycle:</span> Permanently removes the cycle and all associated conversations.</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+
         <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="bg-[#1E1E1E] border border-white/10">
             <TabsTrigger value="users" className="data-[state=active]:bg-[#007AFF]" data-testid="users-tab">

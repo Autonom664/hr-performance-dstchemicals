@@ -716,9 +716,11 @@ async def get_manager_reports(user: User = Depends(require_manager)):
     for report in reports:
         report_data = {**report}
         if cycle:
+            # Only show conversations that are not in draft status (drafts are private to employee)
             conv = await db.conversations.find_one({
                 "cycle_id": cycle["id"],
-                "employee_email": report["email"]
+                "employee_email": report["email"],
+                "status": {"$ne": ConversationStatus.DRAFT.value}  # Don't show drafts to managers
             }, {"_id": 0})
             report_data["conversation_status"] = conv.get("status", ConversationStatus.NOT_STARTED.value) if conv else ConversationStatus.NOT_STARTED.value
             report_data["conversation_id"] = conv.get("id") if conv else None
@@ -728,7 +730,7 @@ async def get_manager_reports(user: User = Depends(require_manager)):
 
 @api_router.get("/manager/reports/{employee_email}/history")
 async def get_report_history(employee_email: str, user: User = Depends(require_manager)):
-    """Get all conversations for a direct report (including archived)."""
+    """Get all conversations for a direct report (including archived). Excludes drafts."""
     employee_email = employee_email.lower()
     
     if UserRole.ADMIN not in user.roles:
@@ -736,7 +738,11 @@ async def get_report_history(employee_email: str, user: User = Depends(require_m
         if not report:
             raise HTTPException(status_code=403, detail="Not authorized")
     
-    conversations = await db.conversations.find({"employee_email": employee_email}, {"_id": 0}).to_list(100)
+    # Don't show draft conversations to managers - they're private until submitted
+    conversations = await db.conversations.find({
+        "employee_email": employee_email,
+        "status": {"$ne": ConversationStatus.DRAFT.value}
+    }, {"_id": 0}).to_list(100)
     
     result = []
     for conv in conversations:
