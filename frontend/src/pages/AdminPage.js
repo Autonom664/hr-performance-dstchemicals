@@ -907,14 +907,14 @@ const AdminPage = () => {
                       </div>
                     ) : (
                       <div className="space-y-4 mt-4">
-                        <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
                           <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5" />
+                            <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5" />
                             <div>
-                              <p className="text-yellow-400 font-medium">Security Warning</p>
-                              <p className="text-sm text-gray-400 mt-1">
-                                Resetting passwords will immediately invalidate existing passwords and log users out. 
-                                Users will need to use the new password and must change it on first login.
+                              <p className="text-red-400 font-medium">⚠️ Warning: This will reset ALL selected passwords</p>
+                              <p className="text-sm text-gray-300 mt-1">
+                                All selected users' current passwords will be immediately invalidated and they will be logged out of all sessions. 
+                                They will need to use their new one-time password on next login and will be required to set a new password.
                               </p>
                             </div>
                           </div>
@@ -1150,7 +1150,7 @@ const AdminPage = () => {
                       <TableHead className="text-gray-400">Name</TableHead>
                       <TableHead className="text-gray-400">Email</TableHead>
                       <TableHead className="text-gray-400">Department</TableHead>
-                      <TableHead className="text-gray-400">Manager</TableHead>
+                      <TableHead className="text-gray-400">Reports To</TableHead>
                       <TableHead className="text-gray-400">Roles</TableHead>
                       <TableHead className="text-gray-400">Status</TableHead>
                       <TableHead className="text-gray-400">Actions</TableHead>
@@ -1162,7 +1162,13 @@ const AdminPage = () => {
                         <TableCell className="font-medium">{user.name || '-'}</TableCell>
                         <TableCell className="font-mono text-sm">{user.email}</TableCell>
                         <TableCell className="text-gray-400">{user.department || '-'}</TableCell>
-                        <TableCell className="text-gray-400 text-sm">{user.manager_email || '-'}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {user.manager_email ? (
+                            <span className="text-blue-400">{user.manager_email}</span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
                             {user.roles?.map((role) => (
