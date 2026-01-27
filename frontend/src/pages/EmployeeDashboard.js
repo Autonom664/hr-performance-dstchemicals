@@ -276,6 +276,30 @@ const EmployeeDashboard = () => {
           </CardContent>
         </Card>
 
+        {/* User Profile Card - Shows Manager */}
+        <Card className="bg-[#121212] border-white/5">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <p className="text-sm text-gray-400 mb-1">Your Name</p>
+                <p className="text-lg font-semibold">{user?.name || user?.email || 'User'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400 mb-1">Email</p>
+                <p className="text-sm font-mono text-gray-300">{user?.email}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400 mb-1">Reports To</p>
+                {user?.manager_email ? (
+                  <p className="text-sm font-mono text-blue-400">{user.manager_email}</p>
+                ) : (
+                  <p className="text-sm text-gray-500">No manager assigned</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Tabs for Current vs History */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-[#1E1E1E] border border-white/10">
