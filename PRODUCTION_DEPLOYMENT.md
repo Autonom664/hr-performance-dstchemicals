@@ -26,6 +26,16 @@
 - [ ] Login tested with admin credentials
 - [ ] **NO demo data seeded** (production uses real employee data)
 
+## Post-Deployment Testing
+
+- [ ] Admin panel loads and displays users (sorted alphabetically by name)
+- [ ] Admin can create/edit performance review cycles
+- [ ] Admin can reset passwords for multiple users
+- [ ] Managers can see their direct reports and submitted reviews
+- [ ] Employees can view manager name/email on dashboard
+- [ ] Employees can save drafts and submit reviews to managers
+- [ ] Conversations in draft status (`in_progress`) are only visible to the employee
+
 ## Post-Deployment
 
 - [ ] MongoDB backup script configured

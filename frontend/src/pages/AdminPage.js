@@ -318,7 +318,13 @@ const AdminPage = () => {
         axiosInstance.get('/admin/users'),
         axiosInstance.get('/admin/cycles'),
       ]);
-      setUsers(usersRes.data);
+      // Sort users by name (case-insensitive), with email as fallback
+      const sortedUsers = usersRes.data.sort((a, b) => {
+        const nameA = (a.name || a.email).toLowerCase();
+        const nameB = (b.name || b.email).toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      setUsers(sortedUsers);
       setCycles(cyclesRes.data);
     } catch (error) {
       toast.error('Failed to load data');

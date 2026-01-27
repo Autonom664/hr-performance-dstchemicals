@@ -81,8 +81,9 @@ Key endpoints:
 
 - Import users (JSON): POST `/api/admin/users/import`.
 - Import users (CSV): POST `/api/admin/users/import/csv`.
-- Reset passwords: POST `/api/admin/users/reset-passwords` (one-time CSV with new passwords; sessions invalidated).
+- Reset passwords: POST `/api/admin/users/reset-passwords` (one-time CSV with new passwords; sessions invalidated). Users are displayed **sorted alphabetically by name** for easy navigation.
 - List users: GET `/api/admin/users` (excludes password_hash).
+- Edit cycles: PATCH `/api/admin/cycles/{id}` to update cycle details (name, start_date, end_date). Cycles can be edited in draft or active state.
 - Cycles: POST `/api/admin/cycles`; PATCH `/api/admin/cycles/{id}?status=active|archived`; GET `/api/admin/cycles`.
 - Import/reset return a one-time CSV of credentials; download immediately.
 
@@ -90,17 +91,18 @@ Key endpoints:
 
 ## Manager Workflows
 
-- Reports list (active cycle status/id): GET `/api/manager/reports`.
-- Current conversation for a report (creates if missing): GET `/api/manager/conversations/{employee_email}`.
+- Reports list (active cycle status/id): GET `/api/manager/reports`. Shows all direct reports with their review status.
+- Current conversation for a report (creates if missing): GET `/api/manager/conversations/{employee_email}`. Only shows conversations that have been **submitted for manager review** (`ready_for_manager` or `completed` status); `in_progress` (draft) conversations remain private to the employee.
 - Update manager feedback/status: PUT `/api/manager/conversations/{employee_email}`.
-- History for a report (incl. archived): GET `/api/manager/reports/{email}/history`.
+- History for a report (incl. archived): GET `/api/manager/reports/{email}/history`. Shows all past conversations with the employee across cycles.
 
 ---
 
 ## Employee Workflows
 
+- Dashboard shows: name, email, manager/reports-to information (if assigned), and current cycle status.
 - Get or auto-create active conversation: GET `/api/conversations/me`.
-- Update employee fields and optionally set status to `in_progress` or `ready_for_manager`: PUT `/api/conversations/me`.
+- Update employee fields (qualitative feedback only) and optionally set status to `in_progress` or `ready_for_manager`: PUT `/api/conversations/me`. Employees can save drafts (`in_progress`) before submitting to their manager (`ready_for_manager`).
 - History: GET `/api/conversations/me/history`.
 - View archived (read-only): GET `/api/conversations/{id}`.
 
