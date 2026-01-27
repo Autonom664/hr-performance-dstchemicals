@@ -318,6 +318,106 @@ class ImportResult(BaseModel):
     message: str
     credentials_csv: Optional[str] = None  # Base64 or direct CSV content for download
 
+@api_router.post("/admin/users")
+async def admin_create_user(
+    user_data: UserImportItem,
+    user: User = Depends(require_admin)
+):
+    """Manually create a new user. Generates one-time password."""
+    email = user_data.employee_email.lower()
+    
+    # Check if user already exists
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=409, detail=f"User {email} already exists")
+    
+    # Generate password
+    plain_password = generate_secure_password(14)
+    password_hash = hash_password(plain_password)
+    
+    # Create user
+    roles = [UserRole.EMPLOYEE.value]
+    if user_data.is_admin:
+        roles.append(UserRole.ADMIN.value)
+    
+    user_doc = {
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "name": user_data.employee_name or "",
+        "department": user_data.department or "",
+        "manager_email": user_data.manager_email.lower() if user_data.manager_email else None,
+        "roles": roles,
+        "is_active": True,
+        "password_hash": password_hash,
+        "must_change_password": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.insert_one(user_doc)
+    
+    # Set manager role if needed
+    if user_data.manager_email:
+        manager = await db.users.find_one({"email": user_data.manager_email.lower()})
+        if manager and UserRole.MANAGER.value not in manager.get("roles", []):
+            await db.users.update_one(
+                {"email": user_data.manager_email.lower()},
+                {"$set": {"roles": manager.get("roles", []) + [UserRole.MANAGER.value]}}
+            )
+    
+    return {
+        "email": email,
+        "one_time_password": plain_password,
+        "message": f"User {email} created successfully. They must change their password on first login."
+    }
+
+@api_router.put("/admin/users/{email}")
+async def admin_edit_user(
+    email: str,
+    user_data: UserImportItem,
+    user: User = Depends(require_admin)
+):
+    """Edit an existing user (don't change password)."""
+    email = email.lower()
+    
+    # Check if user exists
+    existing = await db.users.find_one({"email": email})
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"User {email} not found")
+    
+    # Update roles
+    roles = [UserRole.EMPLOYEE.value]
+    if user_data.is_admin:
+        roles.append(UserRole.ADMIN.value)
+    
+    update_data = {
+        "name": user_data.employee_name or "",
+        "department": user_data.department or "",
+        "manager_email": user_data.manager_email.lower() if user_data.manager_email else None,
+        "roles": roles,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.update_one({"email": email}, {"$set": update_data})
+    
+    # Update manager role if needed
+    # Remove manager role if not managing anyone
+    all_users = await db.users.find({}, {"_id": 0}).to_list(100)
+    for u in all_users:
+        if u.get("manager_email"):
+            manager = await db.users.find_one({"email": u["manager_email"]}, {"_id": 0})
+            if manager and UserRole.MANAGER.value not in manager.get("roles", []):
+                await db.users.update_one(
+                    {"email": u["manager_email"]},
+                    {"$set": {"roles": manager.get("roles", []) + [UserRole.MANAGER.value]}}
+                )
+    
+    updated_user = await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0})
+    return {
+        "message": f"User {email} updated successfully",
+        "user": updated_user
+    }
+
 @api_router.post("/admin/users/import")
 async def admin_import_users(
     users_data: List[UserImportItem],

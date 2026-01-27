@@ -21,7 +21,7 @@ import {
 } from '../components/ui/dialog';
 import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText, Trash2 } from 'lucide-react';
+import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText, Trash2, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -53,6 +53,12 @@ const AdminPage = () => {
   const [creatingCycle, setCreatingCycle] = useState(false);
   const [resettingPasswords, setResettingPasswords] = useState(false);
   const [resettingSinglePassword, setResettingSinglePassword] = useState(false);
+  const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [editingUserData, setEditingUserData] = useState(false);
+  const [newUserPassword, setNewUserPassword] = useState(null);
   const fileInputRef = useRef(null);
   
   // Import form state
@@ -64,6 +70,15 @@ const AdminPage = () => {
   const [cycleName, setCycleName] = useState('');
   const [cycleStartDate, setCycleStartDate] = useState(null);
   const [cycleEndDate, setCycleEndDate] = useState(null);
+  
+  // User form state (for create and edit)
+  const [userForm, setUserForm] = useState({
+    employee_email: '',
+    employee_name: '',
+    department: '',
+    manager_email: '',
+    is_admin: false,
+  });
   
   // Password reset state
   const [selectedUsersForReset, setSelectedUsersForReset] = useState([]);
@@ -254,6 +269,73 @@ const AdminPage = () => {
     }
   };
 
+  const handleCreateUser = async () => {
+    if (!userForm.employee_email || !userForm.employee_name) {
+      toast.error('Email and name are required');
+      return;
+    }
+    setCreatingUser(true);
+    try {
+      const response = await axiosInstance.post('/admin/users', userForm);
+      setNewUserPassword(response.data.one_time_password);
+      toast.success(response.data.message);
+      setUserForm({
+        employee_email: '',
+        employee_name: '',
+        department: '',
+        manager_email: '',
+        is_admin: false,
+      });
+      await fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create user');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const handleEditUser = async () => {
+    if (!editingUser?.email) return;
+    setEditingUserData(true);
+    try {
+      const response = await axiosInstance.put(`/admin/users/${editingUser.email}`, userForm);
+      toast.success(response.data.message);
+      setEditUserDialogOpen(false);
+      setEditingUser(null);
+      setUserForm({
+        employee_email: '',
+        employee_name: '',
+        department: '',
+        manager_email: '',
+        is_admin: false,
+      });
+      await fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to edit user');
+    } finally {
+      setEditingUserData(false);
+    }
+  };
+
+  const openEditUserDialog = (user) => {
+    setEditingUser(user);
+    setUserForm({
+      employee_email: user.email,
+      employee_name: user.name || '',
+      department: user.department || '',
+      manager_email: user.manager_email || '',
+      is_admin: user.roles?.includes('admin') || false,
+    });
+    setEditUserDialogOpen(true);
+  };
+
+  const handleCopyNewPassword = () => {
+    if (newUserPassword) {
+      navigator.clipboard.writeText(newUserPassword);
+      toast.success('Password copied to clipboard');
+    }
+  };
+
   const handleCopySinglePassword = () => {
     if (singleUserResetPassword) {
       navigator.clipboard.writeText(singleUserResetPassword);
@@ -377,6 +459,148 @@ const AdminPage = () => {
             <div className="flex flex-wrap justify-between items-center gap-4">
               <p className="text-gray-400">{users.length} users in system</p>
               <div className="flex gap-2">
+                {/* New User Dialog */}
+                <Dialog open={createUserDialogOpen} onOpenChange={setCreateUserDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-[#007AFF] hover:bg-[#007AFF]/90" data-testid="new-user-btn">
+                      <Plus className="w-4 h-4 mr-2" />
+                      New User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-[#121212] border-white/10">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Plus className="w-5 h-5 text-[#007AFF]" />
+                        Create New User
+                      </DialogTitle>
+                      <DialogDescription>
+                        Add a new user to the system. A one-time password will be generated.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    {newUserPassword ? (
+                      <div className="space-y-4 mt-4">
+                        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <p className="text-green-400 font-medium mb-2">User created successfully!</p>
+                          <p className="text-sm text-gray-400">
+                            Share the one-time password below with the new user.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>One-Time Password</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="text"
+                              value={newUserPassword}
+                              readOnly
+                              className="bg-[#1C1C1E] border-white/10"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCopyNewPassword}
+                              className="border-white/10 hover:bg-white/5 px-3"
+                              data-testid="copy-new-password-btn"
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setCreateUserDialogOpen(false);
+                            setNewUserPassword(null);
+                          }}
+                          className="w-full bg-[#007AFF] hover:bg-[#007AFF]/90"
+                        >
+                          Done
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 mt-4">
+                        <div>
+                          <Label>Email</Label>
+                          <Input
+                            type="email"
+                            placeholder="user@company.com"
+                            value={userForm.employee_email}
+                            onChange={(e) => setUserForm({...userForm, employee_email: e.target.value})}
+                            className="bg-[#1C1C1E] border-white/10 mt-1"
+                            data-testid="new-user-email"
+                          />
+                        </div>
+                        <div>
+                          <Label>Full Name</Label>
+                          <Input
+                            placeholder="John Doe"
+                            value={userForm.employee_name}
+                            onChange={(e) => setUserForm({...userForm, employee_name: e.target.value})}
+                            className="bg-[#1C1C1E] border-white/10 mt-1"
+                            data-testid="new-user-name"
+                          />
+                        </div>
+                        <div>
+                          <Label>Department</Label>
+                          <Input
+                            placeholder="Engineering"
+                            value={userForm.department}
+                            onChange={(e) => setUserForm({...userForm, department: e.target.value})}
+                            className="bg-[#1C1C1E] border-white/10 mt-1"
+                            data-testid="new-user-dept"
+                          />
+                        </div>
+                        <div>
+                          <Label>Manager Email (optional)</Label>
+                          <Input
+                            type="email"
+                            placeholder="manager@company.com"
+                            value={userForm.manager_email}
+                            onChange={(e) => setUserForm({...userForm, manager_email: e.target.value})}
+                            className="bg-[#1C1C1E] border-white/10 mt-1"
+                            data-testid="new-user-manager"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="new-user-admin"
+                            checked={userForm.is_admin}
+                            onCheckedChange={(checked) => setUserForm({...userForm, is_admin: checked})}
+                          />
+                          <Label htmlFor="new-user-admin" className="cursor-pointer">
+                            Make this user an admin
+                          </Label>
+                        </div>
+                        <DialogFooter className="mt-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setCreateUserDialogOpen(false);
+                              setUserForm({
+                                employee_email: '',
+                                employee_name: '',
+                                department: '',
+                                manager_email: '',
+                                is_admin: false,
+                              });
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleCreateUser}
+                            disabled={creatingUser}
+                            className="bg-[#007AFF] hover:bg-[#007AFF]/90"
+                            data-testid="submit-new-user-btn"
+                          >
+                            {creatingUser ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                            Create User
+                          </Button>
+                        </DialogFooter>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+
                 {/* Reset Password Dialog */}
                 <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
                   <DialogTrigger asChild>
@@ -707,10 +931,22 @@ const AdminPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={() => openEditUserDialog(user)}
+                              disabled={editingUserData}
+                              className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                              data-testid={`edit-user-btn-${user.email}`}
+                              title="Edit user"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => handleResetSingleUserPassword(user.email)}
                               disabled={resettingSinglePassword}
                               className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
                               data-testid={`reset-password-btn-${user.email}`}
+                              title="Reset password"
                             >
                               <KeyRound className="w-3 h-3" />
                             </Button>
@@ -724,6 +960,7 @@ const AdminPage = () => {
                               disabled={deletingUser}
                               className="border-red-500/30 text-red-400 hover:bg-red-500/10"
                               data-testid={`delete-user-btn-${user.email}`}
+                              title="Delete user"
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
@@ -907,6 +1144,105 @@ const AdminPage = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Edit User Dialog */}
+        <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+          <DialogContent className="bg-[#1C1C1E] border-white/10">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-400" />
+                Edit User
+              </DialogTitle>
+              <DialogDescription>
+                Update user information and settings
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={userForm.employee_email}
+                  disabled
+                  className="bg-[#0A0A0A] border-white/5 mt-1 text-gray-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+              </div>
+              <div>
+                <Label>Full Name</Label>
+                <Input
+                  placeholder="John Doe"
+                  value={userForm.employee_name}
+                  onChange={(e) => setUserForm({...userForm, employee_name: e.target.value})}
+                  className="bg-[#1C1C1E] border-white/10 mt-1"
+                  data-testid="edit-user-name"
+                />
+              </div>
+              <div>
+                <Label>Department</Label>
+                <Input
+                  placeholder="Engineering"
+                  value={userForm.department}
+                  onChange={(e) => setUserForm({...userForm, department: e.target.value})}
+                  className="bg-[#1C1C1E] border-white/10 mt-1"
+                  data-testid="edit-user-dept"
+                />
+              </div>
+              <div>
+                <Label>Manager Email (optional)</Label>
+                <Input
+                  type="email"
+                  placeholder="manager@company.com"
+                  value={userForm.manager_email}
+                  onChange={(e) => setUserForm({...userForm, manager_email: e.target.value})}
+                  className="bg-[#1C1C1E] border-white/10 mt-1"
+                  data-testid="edit-user-manager"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-user-admin"
+                  checked={userForm.is_admin}
+                  onCheckedChange={(checked) => setUserForm({...userForm, is_admin: checked})}
+                  data-testid="edit-user-admin"
+                />
+                <Label htmlFor="edit-user-admin" className="cursor-pointer">
+                  Make this user an admin
+                </Label>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditUserDialogOpen(false);
+                  setEditingUser(null);
+                  setUserForm({
+                    employee_email: '',
+                    employee_name: '',
+                    department: '',
+                    manager_email: '',
+                    is_admin: false,
+                  });
+                }}
+                disabled={editingUserData}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditUser}
+                disabled={editingUserData}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="submit-edit-user-btn"
+              >
+                {editingUserData ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Edit2 className="w-4 h-4 mr-2" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete User Confirmation Dialog */}
         <Dialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
