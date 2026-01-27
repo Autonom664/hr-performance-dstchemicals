@@ -2,20 +2,20 @@
 
 ## Pre-Deployment
 
-- [ ] Repository cloned to `/opt/hr-performance` on OVH server
-- [ ] Docker and Docker Compose installed
-- [ ] nginx installed and configured
-- [ ] DNS A record for `hr.dstchemicals.com` points to server IP
-- [ ] Strong MongoDB password generated (32+ characters)
-- [ ] `.env` file created from `.env.ovh.example` with production values
+- [x] Repository cloned to `~/apps/hr-performance-dstchemicals` on OVH server
+- [x] Docker and Docker Compose installed
+- [x] nginx installed and configured
+- [x] DNS A record for `hr.dstchemicals.com` points to 57.129.111.133
+- [x] Strong MongoDB password generated (32+ characters)
+- [x] `.env` file created from `.env.ovh.example` with production values
 
 ## Security Configuration
 
-- [ ] Firewall configured (only ports 22, 80, 443 open)
-- [ ] TLS certificate obtained via certbot
-- [ ] `COOKIE_SECURE=true` in `.env`
-- [ ] `CORS_ORIGINS=https://hr.dstchemicals.com` in `.env`
-- [ ] nginx security headers configured (X-Frame-Options, etc.)
+- [x] Firewall configured (UFW enabled, only ports 22, 80, 443 open)
+- [x] TLS certificate obtained via Let's Encrypt (expires 2026-04-24)
+- [x] `COOKIE_SECURE=true` in `.env`
+- [x] `CORS_ORIGINS=https://hr.dstchemicals.com` in `.env`
+- [x] nginx security headers configured (X-Frame-Options, HSTS, etc.)
 
 ## Application Deployment
 
@@ -70,6 +70,59 @@ docker compose up -d --build
 - **Technical Issues:** [Your IT contact]
 - **HR Questions:** [HR contact]
 - **Database Backups:** Located in `/opt/hr-performance/backups/`
+
+---
+
+## SSL/TLS Configuration Details
+
+### Certificate Management
+
+**Certificate location:**
+- Fullchain: `/etc/letsencrypt/live/hr.dstchemicals.com/fullchain.pem`
+- Private key: `/etc/letsencrypt/live/hr.dstchemicals.com/privkey.pem`
+- Expires: 2026-04-24 (90-day validity)
+
+**Auto-renewal:**
+- Managed by certbot systemd timer
+- Runs twice daily (check: `systemctl list-timers | grep certbot`)
+- Test renewal: `sudo certbot renew --dry-run`
+
+**Manual renewal (if needed):**
+```bash
+sudo certbot renew
+sudo systemctl reload nginx
+```
+
+### Nginx Configuration
+
+**Main config:** `/etc/nginx/sites-enabled/hr.dstchemicals.com`
+
+**Key features:**
+- HTTPS on port 443 (IPv4 and IPv6)
+- HTTP to HTTPS redirect (301 Permanent)
+- Reverse proxy to Docker containers:
+  - Frontend: `http://127.0.0.1:3000/`
+  - Backend: `http://127.0.0.1:8001/api/`
+- Security headers:
+  - HSTS: `max-age=86400` (1 day, increase to 31536000 after testing)
+  - X-Frame-Options: SAMEORIGIN
+  - X-Content-Type-Options: nosniff
+  - X-XSS-Protection: 1; mode=block
+  - Referrer-Policy: strict-origin-when-cross-origin
+- Proxy headers for backend (X-Forwarded-Proto, X-Forwarded-For, etc.)
+
+**Verify configuration:**
+```bash
+sudo nginx -t                    # Test syntax
+sudo systemctl reload nginx      # Apply changes (no downtime)
+curl -I https://hr.dstchemicals.com/  # Check headers
+```
+
+**Backup config before changes:**
+```bash
+sudo cp /etc/nginx/sites-enabled/hr.dstchemicals.com \
+        /etc/nginx/sites-available/hr.dstchemicals.com.backup-$(date +%Y%m%d)
+```
 
 ---
 
