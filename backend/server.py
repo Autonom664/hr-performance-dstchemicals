@@ -453,6 +453,34 @@ async def admin_reset_password_single(email: str, user: User = Depends(require_a
         "message": f"Password reset for {email}. User must change on next login."
     }
 
+@api_router.delete("/admin/users/{email}")
+async def admin_delete_user(email: str, user: User = Depends(require_admin)):
+    """Delete a user from the system (admin only). Also deletes their conversations and sessions."""
+    # Check if user exists
+    target_user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete all conversations where user is employee or manager
+    conversations_result = await db.conversations.delete_many({
+        "$or": [
+            {"employee_email": email},
+            {"manager_email": email}
+        ]
+    })
+    
+    # Delete all sessions
+    sessions_result = await db.sessions.delete_many({"email": email})
+    
+    # Delete the user
+    delete_result = await db.users.delete_one({"email": email})
+    
+    return {
+        "message": f"User {email} deleted successfully",
+        "conversations_deleted": conversations_result.deleted_count,
+        "sessions_deleted": sessions_result.deleted_count
+    }
+
 @api_router.post("/admin/users/reset-passwords")
 async def admin_reset_passwords(request: PasswordResetRequest, user: User = Depends(require_admin)):
     """Generate new one-time passwords for selected users."""
@@ -539,6 +567,25 @@ async def admin_update_cycle(cycle_id: str, status: CycleStatus, user: User = De
     
     cycle = await db.cycles.find_one({"id": cycle_id}, {"_id": 0})
     return cycle
+
+@api_router.delete("/admin/cycles/{cycle_id}")
+async def admin_delete_cycle(cycle_id: str, user: User = Depends(require_admin)):
+    """Delete a cycle from the system (admin only). Also deletes all conversations in that cycle."""
+    # Check if cycle exists
+    cycle = await db.cycles.find_one({"id": cycle_id}, {"_id": 0})
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Cycle not found")
+    
+    # Delete all conversations in this cycle
+    conversations_result = await db.conversations.delete_many({"cycle_id": cycle_id})
+    
+    # Delete the cycle
+    delete_result = await db.cycles.delete_one({"id": cycle_id})
+    
+    return {
+        "message": f"Cycle '{cycle.get('name', cycle_id)}' deleted successfully",
+        "conversations_deleted": conversations_result.deleted_count
+    }
 
 # ============ CYCLES ============
 @api_router.get("/cycles/active")
@@ -851,11 +898,13 @@ async def export_conversation_pdf(conversation_id: str, user: User = Depends(req
     # Employee Info
     pdf.section_header('Employee Information', 0, 122, 255)
     pdf.cell(40, 6, 'Employee:', 0)
-    pdf.cell(0, 6, f"{employee.get('name', '')} ({conversation['employee_email']})" if employee else conversation['employee_email'], ln=True)
+    employee_name = f"{employee.get('name', '')} ({conversation['employee_email']})" if employee and employee.get('name') else conversation['employee_email']
+    pdf.cell(0, 6, employee_name or 'N/A', ln=True)
     pdf.cell(40, 6, 'Department:', 0)
     pdf.cell(0, 6, employee.get('department', 'N/A') if employee else 'N/A', ln=True)
     pdf.cell(40, 6, 'Manager:', 0)
-    pdf.cell(0, 6, manager.get('name', conversation.get('manager_email', 'N/A')) if manager else conversation.get('manager_email', 'N/A'), ln=True)
+    manager_name = manager.get('name') if manager and manager.get('name') else conversation.get('manager_email', 'N/A')
+    pdf.cell(0, 6, manager_name or 'N/A', ln=True)
     pdf.cell(40, 6, 'Review Status:', 0)
     pdf.cell(0, 6, conversation.get('status', 'not_started').replace('_', ' ').title(), ln=True)
     pdf.ln(5)

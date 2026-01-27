@@ -21,7 +21,7 @@ import {
 } from '../components/ui/dialog';
 import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText } from 'lucide-react';
+import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -42,6 +42,13 @@ const AdminPage = () => {
   const [singleUserResetDialogOpen, setSingleUserResetDialogOpen] = useState(false);
   const [singleUserResetEmail, setSingleUserResetEmail] = useState(null);
   const [singleUserResetPassword, setSingleUserResetPassword] = useState(null);
+  const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
+  const [deleteUserEmail, setDeleteUserEmail] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+  const [deleteCycleDialogOpen, setDeleteCycleDialogOpen] = useState(false);
+  const [deleteCycleId, setDeleteCycleId] = useState(null);
+  const [deleteCycleName, setDeleteCycleName] = useState(null);
+  const [deletingCycle, setDeletingCycle] = useState(false);
   const [importing, setImporting] = useState(false);
   const [creatingCycle, setCreatingCycle] = useState(false);
   const [resettingPasswords, setResettingPasswords] = useState(false);
@@ -211,6 +218,39 @@ const AdminPage = () => {
       toast.error(error.response?.data?.detail || 'Password reset failed');
     } finally {
       setResettingSinglePassword(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUserEmail) return;
+    setDeletingUser(true);
+    try {
+      const response = await axiosInstance.delete(`/admin/users/${deleteUserEmail}`);
+      toast.success(response.data.message);
+      setDeleteUserDialogOpen(false);
+      setDeleteUserEmail(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete user');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
+  const handleDeleteCycle = async () => {
+    if (!deleteCycleId) return;
+    setDeletingCycle(true);
+    try {
+      const response = await axiosInstance.delete(`/admin/cycles/${deleteCycleId}`);
+      toast.success(response.data.message);
+      setDeleteCycleDialogOpen(false);
+      setDeleteCycleId(null);
+      setDeleteCycleName(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete cycle');
+    } finally {
+      setDeletingCycle(false);
     }
   };
 
@@ -648,16 +688,31 @@ const AdminPage = () => {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleResetSingleUserPassword(user.email)}
-                            disabled={resettingSinglePassword}
-                            className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-                            data-testid={`reset-password-btn-${user.email}`}
-                          >
-                            <KeyRound className="w-3 h-3" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleResetSingleUserPassword(user.email)}
+                              disabled={resettingSinglePassword}
+                              className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                              data-testid={`reset-password-btn-${user.email}`}
+                            >
+                              <KeyRound className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setDeleteUserEmail(user.email);
+                                setDeleteUserDialogOpen(true);
+                              }}
+                              disabled={deletingUser}
+                              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              data-testid={`delete-user-btn-${user.email}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -813,6 +868,21 @@ const AdminPage = () => {
                               Archive
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setDeleteCycleId(cycle.id);
+                              setDeleteCycleName(cycle.name);
+                              setDeleteCycleDialogOpen(true);
+                            }}
+                            disabled={deletingCycle}
+                            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                            data-testid={`delete-cycle-${cycle.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -822,6 +892,107 @@ const AdminPage = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Delete User Confirmation Dialog */}
+        <Dialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
+          <DialogContent className="bg-[#1C1C1E] border-white/10">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-red-500/10">
+                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl">Delete User</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    This action cannot be undone
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-gray-300">
+                Are you sure you want to delete user <span className="font-semibold text-red-400">{deleteUserEmail}</span>?
+              </p>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                <p className="text-sm text-red-400 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>This will permanently delete the user and all their conversations.</span>
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteUserDialogOpen(false);
+                  setDeleteUserEmail(null);
+                }}
+                disabled={deletingUser}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDeleteUser}
+                disabled={deletingUser}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deletingUser ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                Delete User
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Cycle Confirmation Dialog */}
+        <Dialog open={deleteCycleDialogOpen} onOpenChange={setDeleteCycleDialogOpen}>
+          <DialogContent className="bg-[#1C1C1E] border-white/10">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-red-500/10">
+                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl">Delete Cycle</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    This action cannot be undone
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-gray-300">
+                Are you sure you want to delete cycle <span className="font-semibold text-red-400">{deleteCycleName}</span>?
+              </p>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                <p className="text-sm text-red-400 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>This will permanently delete the cycle and all conversations within it.</span>
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteCycleDialogOpen(false);
+                  setDeleteCycleId(null);
+                  setDeleteCycleName(null);
+                }}
+                disabled={deletingCycle}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDeleteCycle}
+                disabled={deletingCycle}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deletingCycle ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                Delete Cycle
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
