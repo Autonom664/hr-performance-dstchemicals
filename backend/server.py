@@ -424,6 +424,35 @@ async def admin_import_users_csv(file: UploadFile = File(...), user: User = Depe
 class PasswordResetRequest(BaseModel):
     emails: List[EmailStr]
 
+@api_router.post("/admin/users/reset-password")
+async def admin_reset_password_single(email: str, user: User = Depends(require_admin)):
+    """Reset password for a single user and return the new one-time password."""
+    email = email.lower()
+    user_doc = await db.users.find_one({"email": email})
+    
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Generate new password
+    plain_password = generate_secure_password(14)
+    password_hash = hash_password(plain_password)
+    
+    # Update user - invalidate current sessions
+    await db.users.update_one({"email": email}, {"$set": {
+        "password_hash": password_hash,
+        "must_change_password": True,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }})
+    
+    # Invalidate all sessions for this user
+    await db.sessions.delete_many({"user_email": email})
+    
+    return {
+        "email": email,
+        "one_time_password": plain_password,
+        "message": f"Password reset for {email}. User must change on next login."
+    }
+
 @api_router.post("/admin/users/reset-passwords")
 async def admin_reset_passwords(request: PasswordResetRequest, user: User = Depends(require_admin)):
     """Generate new one-time passwords for selected users."""
@@ -861,7 +890,11 @@ async def export_conversation_pdf(conversation_id: str, user: User = Depends(req
     pdf.cell(0, 5, f"Last Updated: {str(conversation.get('updated_at', 'N/A'))[:19]} by {conversation.get('updated_by_email', 'N/A')}", ln=True)
     pdf.cell(0, 5, f"PDF Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}", ln=True)
     
+    # Generate PDF bytes - fpdf2 output() returns bytes directly
     pdf_bytes = pdf.output()
+    if isinstance(pdf_bytes, str):
+        pdf_bytes = pdf_bytes.encode('latin-1')
+    
     filename = f"EDI_{conversation['employee_email'].split('@')[0]}_{cycle_name.replace(' ', '_')}.pdf"
     
     return StreamingResponse(

@@ -39,9 +39,13 @@ const AdminPage = () => {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [cycleDialogOpen, setCycleDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [singleUserResetDialogOpen, setSingleUserResetDialogOpen] = useState(false);
+  const [singleUserResetEmail, setSingleUserResetEmail] = useState(null);
+  const [singleUserResetPassword, setSingleUserResetPassword] = useState(null);
   const [importing, setImporting] = useState(false);
   const [creatingCycle, setCreatingCycle] = useState(false);
   const [resettingPasswords, setResettingPasswords] = useState(false);
+  const [resettingSinglePassword, setResettingSinglePassword] = useState(false);
   const fileInputRef = useRef(null);
   
   // Import form state
@@ -190,6 +194,30 @@ const AdminPage = () => {
       setLastResetCredentials(null);
       setResetPasswordDialogOpen(false);
       toast.success('Reset credentials downloaded. This was a one-time download.');
+    }
+  };
+
+  const handleResetSingleUserPassword = async (email) => {
+    if (!email) return;
+    
+    setResettingSinglePassword(true);
+    try {
+      const response = await axiosInstance.post(`/admin/users/reset-password?email=${encodeURIComponent(email)}`);
+      setSingleUserResetEmail(email);
+      setSingleUserResetPassword(response.data.one_time_password);
+      setSingleUserResetDialogOpen(true);
+      toast.success(`Password reset for ${email}`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Password reset failed');
+    } finally {
+      setResettingSinglePassword(false);
+    }
+  };
+
+  const handleCopySinglePassword = () => {
+    if (singleUserResetPassword) {
+      navigator.clipboard.writeText(singleUserResetPassword);
+      toast.success('Password copied to clipboard');
     }
   };
 
@@ -394,6 +422,61 @@ const AdminPage = () => {
                   </DialogContent>
                 </Dialog>
 
+                {/* Single User Password Reset Dialog */}
+                <Dialog open={singleUserResetDialogOpen} onOpenChange={setSingleUserResetDialogOpen}>
+                  <DialogContent className="bg-[#121212] border-white/10 max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <KeyRound className="w-5 h-5 text-green-400" />
+                        Password Reset Successful
+                      </DialogTitle>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4 mt-4">
+                      <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <p className="text-sm text-gray-400 mb-3">
+                          New one-time password generated for:
+                        </p>
+                        <p className="font-mono text-green-400 font-medium break-all">
+                          {singleUserResetEmail}
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label className="text-gray-400">One-Time Password</Label>
+                        <div className="flex gap-2">
+                          <div className="flex-1 p-3 rounded-lg bg-[#1E1E1E] border border-white/10 font-mono text-sm break-all">
+                            {singleUserResetPassword}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleCopySinglePassword}
+                            className="border-white/10 hover:bg-white/5 px-3"
+                            data-testid="copy-password-btn"
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                        <p className="text-xs text-yellow-400">
+                          <strong>Important:</strong> Share this password with the user. They must change it on their first login. This password will not be shown again.
+                        </p>
+                      </div>
+                      
+                      <Button
+                        onClick={() => setSingleUserResetDialogOpen(false)}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        data-testid="close-single-reset-btn"
+                      >
+                        Done
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Import Users Dialog */}
                 <Dialog open={importDialogOpen} onOpenChange={(open) => {
                   setImportDialogOpen(open);
@@ -524,6 +607,7 @@ const AdminPage = () => {
                       <TableHead className="text-gray-400">Manager</TableHead>
                       <TableHead className="text-gray-400">Roles</TableHead>
                       <TableHead className="text-gray-400">Status</TableHead>
+                      <TableHead className="text-gray-400">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -562,6 +646,18 @@ const AdminPage = () => {
                               Active
                             </Badge>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleResetSingleUserPassword(user.email)}
+                            disabled={resettingSinglePassword}
+                            className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                            data-testid={`reset-password-btn-${user.email}`}
+                          >
+                            <KeyRound className="w-3 h-3" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
