@@ -21,7 +21,7 @@ import {
 } from '../components/ui/dialog';
 import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText, Trash2, Edit2 } from 'lucide-react';
+import { Loader2, Users, Calendar as CalendarIcon, Upload, Plus, Play, Archive, Download, KeyRound, AlertTriangle, FileText, Trash2, Edit2, Code, Copy, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -30,6 +30,219 @@ const STATUS_COLORS = {
   active: 'bg-green-500/10 text-green-400 border-green-500/20',
   archived: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
 };
+
+const ENTRA_EXPORT_SCRIPT = `<#
+.SYNOPSIS
+  Export employees from Entra ID to JSON, ONLY including members of the distribution group:
+    dstchemicals@dstchemicals.com  (DSTChemicalsGroup)
+
+  Output format:
+  [
+    {
+      "employee_email": "...",
+      "employee_name": "...",
+      "manager_email": "...",
+      "department": "...",
+      "is_admin": true/false
+    }
+  ]
+
+.VERSION
+  1.1.1 (2026-01-27)
+
+.NOTES
+  Admin membership is determined by membership in AdminGroupDisplayName (default: Group_HRsystemAdmins)
+
+#>
+
+[CmdletBinding()]
+param(
+  [string]$OutFile = ".\\employees.json",
+
+  # Admin group (members => is_admin=true)
+  [string]$AdminGroupDisplayName = "Group_HRsystemAdmins",
+  [string]$AdminGroupId = "",
+
+  # "Real users" must be members of this mail-enabled group
+  [string]$CompanyGroupMail = "dstchemicals@dstchemicals.com",
+  [string]$CompanyGroupDisplayName = "DSTChemicalsGroup",
+
+  # Optional domain filter (extra safety)
+  [string]$EmailDomainFilter = "dstchemicals.com"
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+function Info([string]$m) { Write-Host ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $m) }
+
+function Retry([scriptblock]$sb, [int]$Max=6) {
+  $a=0
+  while ($true) {
+    try { return & $sb }
+    catch {
+      $a++
+      $msg = $_.Exception.Message
+      $th = $msg -match "Too Many Requests|throttl|429"
+      $tr = $msg -match "temporarily|timeout|503|Service Unavailable|gateway"
+      if ($a -ge $Max -or (-not ($th -or $tr))) { throw }
+      $s = [Math]::Min(60, [Math]::Pow(2,$a) + (Get-Random -Minimum 0 -Maximum 3))
+      Info "Transient/Throttle. Retry $a/$Max in $s sec..."
+      Start-Sleep -Seconds $s
+    }
+  }
+}
+
+function ConnectGraph {
+  # Safe import order (Authentication first)
+  Import-Module Microsoft.Graph.Authentication -Force -ErrorAction Stop | Out-Null
+  Import-Module Microsoft.Graph.Users -Force -ErrorAction Stop | Out-Null
+  Import-Module Microsoft.Graph.Groups -Force -ErrorAction Stop | Out-Null
+
+  Info "Export-EntraEmployees.ps1 v1.1.1 starting..."
+  Info "Connecting to Microsoft Graph (interactive)..."
+  $scopes = @("User.Read.All","Group.Read.All","Directory.Read.All")
+  Connect-MgGraph -Scopes $scopes -NoWelcome | Out-Null
+
+  $ctx = Get-MgContext
+  Info ("Connected. Tenant: {0}, Account: {1}" -f $ctx.TenantId, ($ctx.Account ?? "<unknown>"))
+}
+
+function GetGroupIdByMailOrName([string]$mail, [string]$name) {
+  if (-not [string]::IsNullOrWhiteSpace($mail)) {
+    $safeMail = $mail.Replace("'","''")
+    Info "Resolving group by mail: $mail"
+    $g = Retry { Get-MgGroup -Filter "mail eq '$safeMail'" -Property "id,displayName,mail" } | Select-Object -First 1
+    if ($g) { Info ("Group found: {0} ({1})" -f $g.DisplayName, $g.Id); return $g.Id }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($name)) {
+    $safeName = $name.Replace("'","''")
+    Info "Resolving group by displayName: $name"
+    $g = Retry { Get-MgGroup -Filter "displayName eq '$safeName'" -Property "id,displayName,mail" } | Select-Object -First 1
+    if ($g) { Info ("Group found: {0} ({1})" -f $g.DisplayName, $g.Id); return $g.Id }
+  }
+
+  return $null
+}
+
+function GetUserIdsFromGroup([string]$groupId) {
+  $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+  if ([string]::IsNullOrWhiteSpace($groupId)) { return $set }
+
+  Info "Fetching members of groupId $groupId ..."
+  $members = Retry { Get-MgGroupMember -GroupId $groupId -All }
+
+  foreach ($m in $members) {
+    if ($m.AdditionalProperties["@odata.type"] -eq "#microsoft.graph.user") {
+      $null = $set.Add([string]$m.Id)
+    }
+  }
+
+  Info ("User members in group: {0}" -f $set.Count)
+  return $set
+}
+
+function GetUsersByAllowedIdSet([System.Collections.Generic.HashSet[string]]$allowedIds) {
+  Info "Fetching users and filtering to allowed IDs..."
+  $all = Retry { Get-MgUser -All -Property "id,displayName,mail,userPrincipalName,department,accountEnabled" }
+
+  $list = @(
+    foreach ($u in $all) {
+      if ($u.AccountEnabled -ne $true) { continue }
+      if (-not $allowedIds.Contains($u.Id)) { continue }
+
+      $email = $u.Mail
+      if ([string]::IsNullOrWhiteSpace($email)) { $email = $u.UserPrincipalName }
+      if ([string]::IsNullOrWhiteSpace($email)) { continue }
+
+      if (-not [string]::IsNullOrWhiteSpace($EmailDomainFilter)) {
+        if (-not $email.ToLowerInvariant().EndsWith("@$($EmailDomainFilter.ToLowerInvariant())")) { continue }
+      }
+
+      [pscustomobject]@{
+        Id          = $u.Id
+        DisplayName = $u.DisplayName
+        Email       = $email
+        Department  = $u.Department
+      }
+    }
+  )
+
+  Info ("Users selected for export: {0}" -f $list.Count)
+  return $list
+}
+
+function GetManagerEmailMap([object[]]$users) {
+  Info "Building manager_email map..."
+  $map = @{}
+  $i=0
+
+  foreach ($u in $users) {
+    $i++
+    if ($i % 50 -eq 0) { Info ("Manager lookup progress: {0}/{1}" -f $i, $users.Count) }
+
+    $mgrEmail = $null
+    try {
+      $mgr = Retry { Get-MgUserManager -UserId $u.Id -ErrorAction Stop }
+      if ($mgr -and $mgr.Id) {
+        $mgrUser = Retry { Get-MgUser -UserId $mgr.Id -Property "mail,userPrincipalName" }
+        $mgrEmail = $mgrUser.Mail
+        if ([string]::IsNullOrWhiteSpace($mgrEmail)) { $mgrEmail = $mgrUser.UserPrincipalName }
+      }
+    } catch { $mgrEmail = $null }
+
+    $map[$u.Id] = $mgrEmail
+  }
+
+  Info "Manager map complete."
+  return $map
+}
+
+# -------- MAIN --------
+ConnectGraph
+
+# 1) Resolve company group and get "real user" ids
+$companyGroupId = GetGroupIdByMailOrName -mail $CompanyGroupMail -name $CompanyGroupDisplayName
+if (-not $companyGroupId) {
+  throw "Could not find company group by mail '$CompanyGroupMail' or name '$CompanyGroupDisplayName'."
+}
+$realUserIds = GetUserIdsFromGroup -groupId $companyGroupId
+
+# 2) Resolve admin group (optional)
+$adminGroupId = $null
+if (-not [string]::IsNullOrWhiteSpace($AdminGroupId)) {
+  $adminGroupId = $AdminGroupId
+  Info "Using AdminGroupId override: $adminGroupId"
+} else {
+  $adminGroupId = GetGroupIdByMailOrName -mail "" -name $AdminGroupDisplayName
+  if (-not $adminGroupId) { Info "WARNING: Admin group '$AdminGroupDisplayName' not found. is_admin will be FALSE for all users." }
+}
+$adminIds = GetUserIdsFromGroup -groupId $adminGroupId
+
+# 3) Pull user details ONLY for real users
+$users = GetUsersByAllowedIdSet -allowedIds $realUserIds
+$mgrMap = GetManagerEmailMap -users $users
+
+# 4) Transform to JSON schema
+Info "Transforming to required JSON schema..."
+$out = @(
+  foreach ($u in $users) {
+    [pscustomobject]@{
+      employee_email = $u.Email
+      employee_name  = $u.DisplayName
+      manager_email  = $mgrMap[$u.Id]
+      department     = $u.Department
+      is_admin       = $adminIds.Contains($u.Id)
+    }
+  }
+) | Sort-Object employee_email
+
+$out | ConvertTo-Json -Depth 4 | Out-File -FilePath $OutFile -Encoding utf8
+Info ("Done. Wrote {0} employees to {1}" -f $out.Count, (Resolve-Path $OutFile))
+Info "Sample (first 3):"
+$out | Select-Object -First 3 | ConvertTo-Json -Depth 4 | Write-Host
+`;
 
 const AdminPage = () => {
   const { axiosInstance } = useAuth();
@@ -59,6 +272,7 @@ const AdminPage = () => {
   const [creatingUser, setCreatingUser] = useState(false);
   const [editingUserData, setEditingUserData] = useState(false);
   const [newUserPassword, setNewUserPassword] = useState(null);
+  const [copiedCommand, setCopiedCommand] = useState(false);
   const fileInputRef = useRef(null);
   
   // Import form state
@@ -451,6 +665,10 @@ const AdminPage = () => {
             <TabsTrigger value="cycles" className="data-[state=active]:bg-[#007AFF]" data-testid="cycles-tab">
               <CalendarIcon className="w-4 h-4 mr-2" />
               Cycles
+            </TabsTrigger>
+            <TabsTrigger value="tools" className="data-[state=active]:bg-[#007AFF]" data-testid="tools-tab">
+              <Code className="w-4 h-4 mr-2" />
+              Tools & Scripts
             </TabsTrigger>
           </TabsList>
 
@@ -1141,6 +1359,121 @@ const AdminPage = () => {
                   </Card>
                 ))
               )}
+            </div>
+          </TabsContent>
+
+          {/* Tools & Scripts Tab */}
+          <TabsContent value="tools" className="space-y-4">
+            <div className="space-y-4">
+              {/* Help Card */}
+              <Card className="bg-blue-500/5 border border-blue-500/20">
+                <CardContent className="p-4">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-gray-300">
+                      <p className="font-semibold text-blue-400 mb-2">Employee Export Script</p>
+                      <p>This PowerShell script exports employees from your Entra ID directory to JSON format for bulk import into the HR system. Run this script periodically to keep employee data synchronized.</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Usage Instructions */}
+              <Card className="bg-[#121212] border-white/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                    How to Use
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-200 mb-2">Prerequisites:</h4>
+                    <ul className="list-disc list-inside space-y-1 text-gray-400 ml-2">
+                      <li>PowerShell 7+ or Windows PowerShell</li>
+                      <li>Microsoft.Graph PowerShell module installed</li>
+                      <li>Permissions to query Entra ID groups</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-200 mb-2">Installation:</h4>
+                    <div className="bg-[#1E1E1E] border border-white/10 rounded p-3 font-mono text-sm text-gray-300 overflow-x-auto">
+                      <code>Install-Module Microsoft.Graph -Repository PSGallery -Scope CurrentUser</code>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-200 mb-2">Run the script:</h4>
+                    <div className="bg-[#1E1E1E] border border-white/10 rounded p-3 font-mono text-sm text-gray-300 overflow-x-auto">
+                      <code>./Export-EntraEmployees.ps1 -OutFile ".\employees.json" -AdminGroupDisplayName "Group_HRsystemAdmins" -CompanyGroupMail "dstchemicals@dstchemicals.com" -CompanyGroupDisplayName "DSTChemicalsGroup" -EmailDomainFilter "dstchemicals.com"</code>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-200 mb-2">Import the exported file:</h4>
+                    <p className="text-gray-400 text-sm">Once you have the employees.json file, use the "Import Users" feature in the Users tab to import the employee data into the system.</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Script Display */}
+              <Card className="bg-[#121212] border-white/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Code className="w-5 h-5" />
+                    PowerShell Script
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label className="text-gray-300 mb-2 block">Export-EntraEmployees.ps1</Label>
+                    <div className="bg-[#0A0A0A] border border-white/10 rounded font-mono text-sm text-gray-300 overflow-x-auto p-4 max-h-96 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap break-words text-xs">{ENTRA_EXPORT_SCRIPT}</pre>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        const element = document.createElement('a');
+                        const file = new Blob([ENTRA_EXPORT_SCRIPT], { type: 'text/plain' });
+                        element.href = URL.createObjectURL(file);
+                        element.download = 'Export-EntraEmployees.ps1';
+                        document.body.appendChild(element);
+                        element.click();
+                        document.body.removeChild(element);
+                      }}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Script
+                    </Button>
+
+                    <Button
+                      onClick={() => {
+                        navigator.clipboard.writeText(ENTRA_EXPORT_SCRIPT);
+                        setCopiedCommand(true);
+                        setTimeout(() => setCopiedCommand(false), 2000);
+                      }}
+                      variant="outline"
+                      className="border-white/10 hover:bg-white/5"
+                    >
+                      {copiedCommand ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 mr-2 text-green-400" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy Script
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
