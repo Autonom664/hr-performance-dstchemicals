@@ -285,6 +285,16 @@ const AdminPage = () => {
   const [cycleStartDate, setCycleStartDate] = useState(null);
   const [cycleEndDate, setCycleEndDate] = useState(null);
   
+  // Edit cycle state
+  const [editCycleDialogOpen, setEditCycleDialogOpen] = useState(false);
+  const [editingCycle, setEditingCycle] = useState(null);
+  const [editingCycleData, setEditingCycleData] = useState(false);
+  const [editCycleForm, setEditCycleForm] = useState({
+    name: '',
+    start_date: null,
+    end_date: null,
+  });
+  
   // User form state (for create and edit)
   const [userForm, setUserForm] = useState({
     employee_email: '',
@@ -607,6 +617,45 @@ const AdminPage = () => {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to update cycle');
+    }
+  };
+
+  const openEditCycleDialog = (cycle) => {
+    setEditingCycle(cycle);
+    setEditCycleForm({
+      name: cycle.name,
+      start_date: new Date(cycle.start_date),
+      end_date: new Date(cycle.end_date),
+    });
+    setEditCycleDialogOpen(true);
+  };
+
+  const handleEditCycle = async () => {
+    if (!editingCycle?.id || !editCycleForm.name || !editCycleForm.start_date || !editCycleForm.end_date) {
+      toast.error('Please fill all fields');
+      return;
+    }
+
+    setEditingCycleData(true);
+    try {
+      await axiosInstance.put(`/admin/cycles/${editingCycle.id}`, {
+        name: editCycleForm.name,
+        start_date: editCycleForm.start_date.toISOString(),
+        end_date: editCycleForm.end_date.toISOString(),
+      });
+      toast.success('Cycle updated successfully');
+      setEditCycleDialogOpen(false);
+      setEditingCycle(null);
+      setEditCycleForm({
+        name: '',
+        start_date: null,
+        end_date: null,
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to edit cycle');
+    } finally {
+      setEditingCycleData(false);
     }
   };
 
@@ -1315,6 +1364,17 @@ const AdminPage = () => {
                           </p>
                         </div>
                         <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditCycleDialog(cycle)}
+                            disabled={editingCycleData}
+                            className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                            data-testid={`edit-cycle-btn-${cycle.id}`}
+                            title="Edit cycle"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
                           {cycle.status === 'draft' && (
                             <Button
                               size="sm"
@@ -1477,6 +1537,111 @@ const AdminPage = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Edit Cycle Dialog */}
+        <Dialog open={editCycleDialogOpen} onOpenChange={setEditCycleDialogOpen}>
+          <DialogContent className="bg-[#1C1C1E] border-white/10">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-400" />
+                Edit Performance Cycle
+              </DialogTitle>
+              <DialogDescription>
+                Update cycle details
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label>Cycle Name</Label>
+                <Input
+                  value={editCycleForm.name}
+                  onChange={(e) => setEditCycleForm({...editCycleForm, name: e.target.value})}
+                  placeholder="e.g., 2025 Annual Review"
+                  className="bg-[#1E1E1E] border-white/10"
+                  data-testid="edit-cycle-name"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Start Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal bg-[#1E1E1E] border-white/10"
+                        data-testid="edit-start-date-btn"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {editCycleForm.start_date ? format(editCycleForm.start_date, 'PPP') : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-[#1E1E1E] border-white/10" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={editCycleForm.start_date}
+                        onSelect={(date) => setEditCycleForm({...editCycleForm, start_date: date})}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>End Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal bg-[#1E1E1E] border-white/10"
+                        data-testid="edit-end-date-btn"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {editCycleForm.end_date ? format(editCycleForm.end_date, 'PPP') : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-[#1E1E1E] border-white/10" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={editCycleForm.end_date}
+                        onSelect={(date) => setEditCycleForm({...editCycleForm, end_date: date})}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditCycleDialogOpen(false);
+                  setEditingCycle(null);
+                  setEditCycleForm({
+                    name: '',
+                    start_date: null,
+                    end_date: null,
+                  });
+                }}
+                disabled={editingCycleData}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditCycle}
+                disabled={editingCycleData}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="submit-edit-cycle-btn"
+              >
+                {editingCycleData ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Edit2 className="w-4 h-4 mr-2" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit User Dialog */}
         <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
